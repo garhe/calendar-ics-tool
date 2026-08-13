@@ -1,0 +1,9 @@
+node_modules/
+ics-events/
+.env
+.env.*
+!.env.example
+.vscode/
+.DS_Store
+Thumbs.db
+npm-debug.log*

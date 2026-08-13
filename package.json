@@ -1,0 +1,12 @@
+{
+  "name": "calendar-ics-tool",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Paste text or screenshot, extract events, and export ICS files",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}

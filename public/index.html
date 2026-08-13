@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0f766e" />
+  <meta name="description" content="Create downloadable calendar events and recurring lunar birthday reminders." />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="ICS Calendar" />
+  <title>Calendar ICS Tool</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/app-icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icons/app-icon-180.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <header>
+      <h1>Calendar ICS Tool</h1>
+      <p>Paste screenshot or text, extract events, then export .ics files.</p>
+    </header>
+
+    <section class="panel">
+      <h2>Input</h2>
+      <p>Paste screenshot with <strong>Ctrl+V</strong> while this page is focused, or paste text below.</p>
+      <div id="pasteZone" class="paste-zone" tabindex="0" aria-label="Paste zone">
+        Click here and press Ctrl+V to paste screenshot
+      </div>
+      <canvas id="imagePreview" class="image-preview" hidden></canvas>
+      <div class="actions">
+        <button id="ocrButton" disabled>Run OCR on Pasted Screenshot</button>
+      </div>
+      <label for="rawText">Event text</label>
+      <textarea id="rawText" rows="10" placeholder="Example:&#10;Design Review | 2026-05-20 14:00-15:00 | Teams | discuss Q3 roadmap | Europe/Paris"></textarea>
+      <div class="actions">
+        <button id="parseButton">Extract Events</button>
+      </div>
+    </section>
+
+    <section class="panel lunar-panel">
+      <h2>Lunar Birthday</h2>
+      <p class="hint">Enter a lunar birthday directly, or use a Gregorian birthday to fill it automatically.</p>
+      <div class="lunar-grid">
+        <label>Person<input id="birthdayName" type="text" placeholder="Name" /></label>
+        <label>Gregorian birthdate (optional)<input id="birthDate" type="text" inputmode="numeric" maxlength="10" placeholder="DD-MM-YYYY" /></label>
+        <label>Lunar birthday<input id="lunarBirthday" type="text" inputmode="numeric" maxlength="10" placeholder="DD-MM-YYYY" /></label>
+        <label class="timezone-field">Timezone
+          <input id="birthdayTimezone" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="timezoneOptions" autocomplete="off" placeholder="UTC+7 or city name" />
+          <div id="timezoneOptions" class="timezone-options" role="listbox" hidden></div>
+        </label>
+      </div>
+      <div class="actions">
+        <button id="generateBirthdayButton" type="button">Generate 60 Reminders</button>
+        <span id="lunarStatus" class="hint"></span>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="section-heading">
+        <h2>Parsed Events</h2>
+        <button id="toggleEventsButton" class="secondary-button" type="button" aria-expanded="false" aria-controls="eventsRegion">Show events (0)</button>
+      </div>
+      <div id="eventsRegion" hidden>
+        <p class="hint">Expected line format: <code>Title | YYYY-MM-DD HH:mm-HH:mm | Location | Description | Timezone</code></p>
+        <div id="eventsContainer"></div>
+        <button id="addEventButton" type="button">Add Blank Event</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Export</h2>
+      <fieldset>
+        <legend>File mode</legend>
+        <label><input type="radio" name="mode" value="single" checked /> One .ics file with all events</label>
+        <label><input type="radio" name="mode" value="multi" /> One .ics file per event</label>
+      </fieldset>
+      <div class="actions">
+        <button id="pickFolderButton">Choose Output Folder (Optional)</button>
+        <span id="folderStatus">Exports download normally when no folder is selected</span>
+      </div>
+      <div class="actions">
+        <button id="exportButton">Export .ics</button>
+      </div>
+      <p id="status" role="status"></p>
+    </section>
+  </main>
+
+  <script src="vendor/tesseract.min.js"></script>
+  <script src="vendor/lunar.js"></script>
+  <script src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js'));
+    }
+  </script>
+</body>
+</html>
