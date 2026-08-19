@@ -197,6 +197,11 @@ function nextDate(date) {
   return next.toISOString().slice(0, 10);
 }
 
+function addDays(date, days) {
+  const [year, month, day] = date.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
+}
+
 function isIanaTimezone(timezone) {
   try {
     new Intl.DateTimeFormat('en', { timeZone: timezone }).format();
@@ -229,7 +234,7 @@ function eventToIcsBlock(event, timezone = resolveTimezone(birthdayTimezone.valu
       ? toIcsDateTime(event.date, event.startTime)
       : toIcsUtcDateTime(event.date, event.startTime, fixedOffsetMinutes);
   const dtEnd = event.allDay
-    ? toIcsDate(nextDate(event.date))
+    ? toIcsDate(event.endDate || nextDate(event.date))
     : fixedOffsetMinutes === null
       ? toIcsDateTime(event.date, event.endTime)
       : toIcsUtcDateTime(event.date, event.endTime, fixedOffsetMinutes);
@@ -365,11 +370,17 @@ function makeCalendarIcs(events) {
 
 async function exportIcsFile(filename, content) {
   if (folderHandle) {
-    const file = await folderHandle.getFileHandle(filename, { create: true });
-    const writable = await file.createWritable();
-    await writable.write(content);
-    await writable.close();
-    return;
+    try {
+      const file = await folderHandle.getFileHandle(filename, { create: true });
+      const writable = await file.createWritable();
+      await writable.write(content);
+      await writable.close();
+      return;
+    } catch (error) {
+      if (error?.name !== 'NotAllowedError' && error?.name !== 'SecurityError') throw error;
+      folderHandle = null;
+      folderStatus.textContent = 'Folder access unavailable; exporting to browser Downloads';
+    }
   }
 
   const blob = new Blob([content], { type: 'text/calendar;charset=utf-8' });
@@ -393,6 +404,8 @@ function inferEventsFromText(text) {
   for (const line of lines) {
     const parts = line.split('|').map((p) => p.trim());
     if (parts.length < 2) {
+      const itineraryEvent = inferItineraryEvent(line);
+      if (itineraryEvent) events.push(itineraryEvent);
       continue;
     }
 
@@ -413,6 +426,63 @@ function inferEventsFromText(text) {
   }
 
   return events;
+}
+
+const monthNumbers = {
+  jan: 1, january: 1,
+  feb: 2, february: 2,
+  mar: 3, march: 3,
+  apr: 4, april: 4,
+  may: 5,
+  jun: 6, june: 6,
+  jul: 7, july: 7,
+  aug: 8, august: 8,
+  sep: 9, sept: 9, september: 9,
+  oct: 10, october: 10,
+  nov: 11, november: 11,
+  dec: 12, december: 12
+};
+
+function itineraryDate(day, monthName, year = new Date().getFullYear()) {
+  const month = monthNumbers[monthName.toLowerCase()];
+  if (!month) return '';
+  return `${year}-${String(month).padStart(2, '0')}-${String(Number(day)).padStart(2, '0')}`;
+}
+
+function inferItineraryEvent(line) {
+  const timedMatch = line.match(/^(\d{1,2})\s+([a-z]+)(?:\s+(\d{4}))?\s+(\d{1,2})h(\d{2})\s*>\s*(\d{1,2})h(\d{2})\s*:\s*(.+)$/i);
+  if (timedMatch) {
+    const [, day, month, year, startHour, startMinute, endHour, endMinute, details] = timedMatch;
+    const transportMatch = details.match(/^(Train|Bus)\s+(.+?\d+)\s+(.+?)\s*>\s*(.+?)(?:\s+(Included\b.*|\d+(?:[.,]\d+)?\s*€.*))?$/iu);
+    if (!transportMatch) return null;
+
+    const [, mode, service, origin, destination, fare = ''] = transportMatch;
+    return {
+      title: `${mode} ${service}: ${origin} to ${destination}`,
+      date: itineraryDate(day, month, year ? Number(year) : undefined),
+      startTime: `${String(Number(startHour)).padStart(2, '0')}:${startMinute}`,
+      endTime: `${String(Number(endHour)).padStart(2, '0')}:${endMinute}`,
+      timezone: 'Europe/Paris',
+      location: `${origin} to ${destination}`,
+      description: fare
+    };
+  }
+
+  const stayMatch = line.match(/^(\d{1,2})\s+([a-z]+)(?:\s+(\d{4}))?\s*>\s*\d{1,2}\s+[a-z]+(?:\s+\d{4})?\s*:\s*(\d+)\s+nights?\s+in\s+(.+?)(?:\s+(\d+(?:[.,]\d+)?\s*€.*))?$/iu);
+  if (!stayMatch) return null;
+
+  const [, day, month, year, nightCount, location, price = ''] = stayMatch;
+  const date = itineraryDate(day, month, year ? Number(year) : undefined);
+  const nights = Number(nightCount);
+  return {
+    title: `${nights}-night stay in ${location}`,
+    date,
+    endDate: addDays(date, nights),
+    allDay: true,
+    timezone: 'Europe/Paris',
+    location,
+    description: price
+  };
 }
 
 function normalizeTime(value) {
