@@ -404,8 +404,13 @@ function inferEventsFromText(text) {
   for (const line of lines) {
     const parts = line.split('|').map((p) => p.trim());
     if (parts.length < 2) {
-      const itineraryEvent = inferItineraryEvent(line);
-      if (itineraryEvent) events.push(itineraryEvent);
+      const inferredEvent = inferFlexibleEvent(line);
+      if (inferredEvent) {
+        events.push(inferredEvent);
+      } else if (events.length > 0) {
+        const previousEvent = events.at(-1);
+        previousEvent.description = [previousEvent.description, line].filter(Boolean).join(' ');
+      }
       continue;
     }
 
@@ -415,14 +420,20 @@ function inferEventsFromText(text) {
     const description = parts[3] || '';
     const timezone = parts[4] || '';
 
-    const dateMatch = dateTime.match(/(\d{4}-\d{2}-\d{2})/);
-    const timeMatch = dateTime.match(/(\d{1,2}:\d{2})\s*[-–]\s*(\d{1,2}:\d{2})/);
+    const dateResult = extractDate(dateTime);
+    const timeResult = extractTimeRange(dateResult.remainingText);
+    const allDay = !timeResult.startTime;
 
-    const date = dateMatch ? dateMatch[1] : '';
-    const startTime = timeMatch ? normalizeTime(timeMatch[1]) : '';
-    const endTime = timeMatch ? normalizeTime(timeMatch[2]) : '';
-
-    events.push({ title, date, startTime, endTime, timezone, location, description });
+    events.push({
+      title,
+      date: dateResult.date,
+      startTime: timeResult.startTime,
+      endTime: timeResult.endTime,
+      allDay,
+      timezone: allDay ? timezone : (timezone || guessTimezone(`${location} ${description}`)),
+      location,
+      description
+    });
   }
 
   return events;
@@ -430,58 +441,153 @@ function inferEventsFromText(text) {
 
 const monthNumbers = {
   jan: 1, january: 1,
-  feb: 2, february: 2,
-  mar: 3, march: 3,
-  apr: 4, april: 4,
-  may: 5,
-  jun: 6, june: 6,
-  jul: 7, july: 7,
-  aug: 8, august: 8,
-  sep: 9, sept: 9, september: 9,
-  oct: 10, october: 10,
-  nov: 11, november: 11,
-  dec: 12, december: 12
+  feb: 2, february: 2, fev: 2, fevrier: 2,
+  mar: 3, march: 3, mars: 3,
+  apr: 4, april: 4, avr: 4, avril: 4,
+  may: 5, mai: 5,
+  jun: 6, june: 6, juin: 6,
+  jul: 7, july: 7, juil: 7, juillet: 7,
+  aug: 8, august: 8, aout: 8,
+  sep: 9, sept: 9, september: 9, septembre: 9,
+  oct: 10, october: 10, octobre: 10,
+  nov: 11, november: 11, novembre: 11,
+  dec: 12, december: 12, decembre: 12
 };
 
+function normalizeMonthName(value) {
+  return value.toLowerCase().replace(/\./g, '').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
 function itineraryDate(day, monthName, year = new Date().getFullYear()) {
-  const month = monthNumbers[monthName.toLowerCase()];
+  const month = monthNumbers[normalizeMonthName(monthName)];
   if (!month) return '';
   return `${year}-${String(month).padStart(2, '0')}-${String(Number(day)).padStart(2, '0')}`;
 }
 
-function inferItineraryEvent(line) {
-  const timedMatch = line.match(/^(\d{1,2})\s+([a-z]+)(?:\s+(\d{4}))?\s+(\d{1,2})h(\d{2})\s*>\s*(\d{1,2})h(\d{2})\s*:\s*(.+)$/i);
-  if (timedMatch) {
-    const [, day, month, year, startHour, startMinute, endHour, endMinute, details] = timedMatch;
-    const transportMatch = details.match(/^(Train|Bus)\s+(.+?\d+)\s+(.+?)\s*>\s*(.+?)(?:\s+(Included\b.*|\d+(?:[.,]\d+)?\s*€.*))?$/iu);
-    if (!transportMatch) return null;
+function normalizeExtractedText(value) {
+  return value
+    .replace(/(?:-+|=)>/g, '>')
+    .replace(/[›»➜➡→]/g, '>')
+    .replace(/[‐‑‒–—]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
-    const [, mode, service, origin, destination, fare = ''] = transportMatch;
+function validIsoDate(year, month, day) {
+  const candidate = new Date(Date.UTC(year, month - 1, day));
+  if (candidate.getUTCFullYear() !== year
+    || candidate.getUTCMonth() + 1 !== month
+    || candidate.getUTCDate() !== day) return '';
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function extractDate(value) {
+  const text = normalizeExtractedText(value);
+  const patterns = [
+    { regex: /\b(20\d{2})[-/.](\d{1,2})[-/.](\d{1,2})\b/, parts: (match) => [match[1], match[2], match[3]] },
+    { regex: /\b(\d{1,2})[-/.](\d{1,2})[-/.](20\d{2})\b/, parts: (match) => [match[3], match[2], match[1]] },
+    { regex: /\b(\d{1,2})\s+([\p{L}.]{3,10})(?:\s*,?\s*(20\d{2}))?/iu, parts: (match) => [match[3] || new Date().getFullYear(), monthNumbers[normalizeMonthName(match[2])], match[1]] },
+    { regex: /\b([\p{L}.]{3,10})\s+(\d{1,2})(?:st|nd|rd|th)?(?:\s*,?\s*(20\d{2}))?/iu, parts: (match) => [match[3] || new Date().getFullYear(), monthNumbers[normalizeMonthName(match[1])], match[2]] }
+  ];
+
+  for (const { regex, parts } of patterns) {
+    const match = text.match(regex);
+    if (!match) continue;
+    const [year, month, day] = parts(match).map(Number);
+    const date = validIsoDate(year, month, day);
+    if (date) return { date, remainingText: text.replace(match[0], ' ').replace(/\s+/g, ' ').trim() };
+  }
+
+  return { date: '', remainingText: text };
+}
+
+function parseFlexibleTime(hourValue, minuteValue = '0', meridiem = '') {
+  let hours = Number(hourValue);
+  const minutes = Number(minuteValue || 0);
+  const period = meridiem.toLowerCase();
+  if (period === 'pm' && hours < 12) hours += 12;
+  if (period === 'am' && hours === 12) hours = 0;
+  if (hours > 23 || minutes > 59) return '';
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
+function extractTimeRange(value) {
+  const time = '(\\d{1,2})(?:[:h.]([0-5]\\d))?\\s*(am|pm)?';
+  const range = new RegExp(`${time}\\s*(?:-|>|to|until|à|au|bis|hasta)\\s*${time}`, 'i');
+  const match = normalizeExtractedText(value).match(range);
+  if (!match) return { startTime: '', endTime: '', remainingText: value };
+
+  return {
+    startTime: parseFlexibleTime(match[1], match[2], match[3]),
+    endTime: parseFlexibleTime(match[4], match[5], match[6] || match[3]),
+    remainingText: normalizeExtractedText(value).replace(match[0], ' ').replace(/\s+/g, ' ').trim()
+  };
+}
+
+function guessTimezone(value) {
+  const text = value.toLowerCase();
+  const timezoneHints = [
+    [/\b(paris|france|rennes|lille|metz|luxembourg|brussels|bruges)\b/, 'Europe/Paris'],
+    [/\b(london|edinburgh|uk|england|scotland)\b/, 'Europe/London'],
+    [/\b(tokyo|kyoto|osaka|japan)\b/, 'Asia/Tokyo'],
+    [/\b(berlin|hamburg|germany)\b/, 'Europe/Berlin'],
+    [/\b(rome|naples|palermo|catania|italy)\b/, 'Europe/Rome'],
+    [/\b(toronto|montreal)\b/, 'America/Toronto'],
+    [/\b(vancouver)\b/, 'America/Vancouver'],
+    [/\b(ho chi minh|hanoi|vietnam)\b/, 'Asia/Ho_Chi_Minh']
+  ];
+  return timezoneHints.find(([pattern]) => pattern.test(text))?.[1] || defaultTimezone;
+}
+
+function inferFlexibleEvent(line) {
+  const normalizedLine = normalizeExtractedText(line);
+  const dateResult = extractDate(normalizedLine);
+  if (!dateResult.date) return null;
+
+  const stayMatch = dateResult.remainingText.match(/(?:>|to)?\s*(?:\d{1,2}\s+[a-z]+(?:\s+20\d{2})?\s*:?)?\s*(\d+)\s+nights?\s+in\s+(.+)/i);
+  if (stayMatch) {
+    const nights = Number(stayMatch[1]);
+    const location = stayMatch[2].replace(/\s+\d+(?:[.,]\d+)?\s*(?:€|eur|usd|gbp).*$/i, '').trim();
     return {
-      title: `${mode} ${service}: ${origin} to ${destination}`,
-      date: itineraryDate(day, month, year ? Number(year) : undefined),
-      startTime: `${String(Number(startHour)).padStart(2, '0')}:${startMinute}`,
-      endTime: `${String(Number(endHour)).padStart(2, '0')}:${endMinute}`,
-      timezone: 'Europe/Paris',
-      location: `${origin} to ${destination}`,
-      description: fare
+      title: `${nights}-night stay in ${location}`,
+      date: dateResult.date,
+      endDate: addDays(dateResult.date, nights),
+      allDay: true,
+      timezone: guessTimezone(location),
+      location,
+      description: normalizedLine
     };
   }
 
-  const stayMatch = line.match(/^(\d{1,2})\s+([a-z]+)(?:\s+(\d{4}))?\s*>\s*\d{1,2}\s+[a-z]+(?:\s+\d{4})?\s*:\s*(\d+)\s+nights?\s+in\s+(.+?)(?:\s+(\d+(?:[.,]\d+)?\s*€.*))?$/iu);
-  if (!stayMatch) return null;
+  const timeResult = extractTimeRange(dateResult.remainingText);
+  const details = timeResult.remainingText
+    .replace(/\b(?:lun|mar|mer|jeu|ven|sam|dim)\.?\b/gi, '')
+    .replace(/[\s.:,-]+(?:de|from)?[\s.:,-]*$/i, '')
+    .replace(/^[\s:,-]+|[\s:,-]+$/g, '')
+    .trim();
+  const serviceRoute = details.match(/\b(?:(train|bus|flight|ferry)\s+)?((?:[a-z]{2,}\s+)?[a-z]*\d[\w-]*)\s+(.+?)\s*>\s*(.+?)(?=\s+\d+(?:[.,]\d+)?\s*(?:€|eur|usd|gbp)|$)/i);
+  const plainRoute = details.match(/^(.+?)\s*>\s*(.+)$/);
+  const routeMatch = serviceRoute || plainRoute;
+  const mode = serviceRoute?.[1] || (serviceRoute ? 'Flight' : '');
+  const service = serviceRoute?.[2] || '';
+  const origin = (serviceRoute?.[3] || plainRoute?.[1] || '').trim();
+  const destination = (serviceRoute?.[4] || plainRoute?.[2] || '').trim();
+  const location = routeMatch ? `${origin} to ${destination}` : '';
+  const title = serviceRoute
+    ? `${mode[0].toUpperCase()}${mode.slice(1).toLowerCase()} ${service}`.trim() + `: ${location}`
+    : plainRoute
+      ? location
+    : (details.replace(/\s+\d+(?:[.,]\d+)?\s*(?:€|eur|usd|gbp).*$/i, '').trim() || 'Calendar event');
 
-  const [, day, month, year, nightCount, location, price = ''] = stayMatch;
-  const date = itineraryDate(day, month, year ? Number(year) : undefined);
-  const nights = Number(nightCount);
   return {
-    title: `${nights}-night stay in ${location}`,
-    date,
-    endDate: addDays(date, nights),
-    allDay: true,
-    timezone: 'Europe/Paris',
+    title,
+    date: dateResult.date,
+    startTime: timeResult.startTime,
+    endTime: timeResult.endTime,
+    allDay: !timeResult.startTime,
+    timezone: guessTimezone(`${location} ${details}`),
     location,
-    description: price
+    description: normalizedLine
   };
 }
 
@@ -576,6 +682,8 @@ parseButton.addEventListener('click', () => {
   }
 
   state.events = inferEventsFromText(text);
+  toggleEventsButton.setAttribute('aria-expanded', 'true');
+  eventsRegion.hidden = false;
   renderEvents();
 
   setStatus(`Extracted ${state.events.length} event(s). Review and edit before export.`);

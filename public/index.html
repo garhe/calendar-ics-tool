@@ -32,7 +32,7 @@
         <button id="ocrButton" disabled>Run OCR on Pasted Screenshot</button>
       </div>
       <label for="rawText">Event text</label>
-      <textarea id="rawText" rows="10" placeholder="Examples:&#10;Design Review | 2026-05-20 14:00-15:00 | Teams | discuss Q3 roadmap | Europe/Paris&#10;16 Sept 12h30 > 14h45: Train Ouigo 7615 Rennes > Quimper 51€/pax"></textarea>
+      <textarea id="rawText" rows="10" placeholder="Examples:&#10;Design Review | 2026-05-20 14:00-15:00 | Teams | discuss Q3 roadmap | Europe/Paris&#10;AF 1290 Paris → Catania, 28 Aug 2026, 09:20 to 12:05&#10;September 9th 2026 2pm-3:30pm Project review London"></textarea>
       <div class="actions">
         <button id="parseButton">Extract Events</button>
       </div>
@@ -62,7 +62,7 @@
         <button id="toggleEventsButton" class="secondary-button" type="button" aria-expanded="false" aria-controls="eventsRegion">Show events (0)</button>
       </div>
       <div id="eventsRegion" hidden>
-        <p class="hint">Use pipe-delimited events or itinerary lines such as <code>16 Sept 12h30 &gt; 14h45: Train Ouigo 7615 Rennes &gt; Quimper 51€/pax</code>.</p>
+        <p class="hint">Dates, time ranges, flights, trains, stays, and common OCR arrow characters are detected automatically.</p>
         <div id="eventsContainer"></div>
         <button id="addEventButton" type="button">Add Blank Event</button>
       </div>
