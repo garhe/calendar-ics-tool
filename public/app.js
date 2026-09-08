@@ -225,33 +225,73 @@ function toIcsUtcDateTime(date, time, offsetMinutes) {
   return utcDate.toISOString().replace(/[-:]/g, '').replace(/\.000Z$/, 'Z');
 }
 
+function toIcsIanaUtcDateTime(date, time, timezone) {
+  const [year, month, day] = date.split('-').map(Number);
+  const [hours, minutes] = time.split(':').map(Number);
+  const intendedWallTime = Date.UTC(year, month - 1, day, hours, minutes);
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+
+  let utcTime = intendedWallTime;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const parts = Object.fromEntries(
+      formatter.formatToParts(new Date(utcTime))
+        .filter(({ type }) => type !== 'literal')
+        .map(({ type, value }) => [type, Number(value)])
+    );
+    const representedWallTime = Date.UTC(
+      parts.year,
+      parts.month - 1,
+      parts.day,
+      parts.hour,
+      parts.minute,
+      parts.second
+    );
+    utcTime += intendedWallTime - representedWallTime;
+  }
+
+  return new Date(utcTime).toISOString().replace(/[-:]/g, '').replace(/\.000Z$/, 'Z');
+}
+
 function eventToIcsBlock(event, timezone = resolveTimezone(birthdayTimezone.value)) {
   const eventTimezone = resolveTimezone(event.timezone || timezone);
   const fixedOffsetMinutes = fixedTimezoneOffsetMinutes(eventTimezone);
+  const ianaTimezone = isIanaTimezone(eventTimezone);
   const dtStart = event.allDay
     ? toIcsDate(event.date)
-    : fixedOffsetMinutes === null
-      ? toIcsDateTime(event.date, event.startTime)
-      : toIcsUtcDateTime(event.date, event.startTime, fixedOffsetMinutes);
+    : fixedOffsetMinutes !== null
+      ? toIcsUtcDateTime(event.date, event.startTime, fixedOffsetMinutes)
+      : ianaTimezone
+        ? toIcsIanaUtcDateTime(event.date, event.startTime, eventTimezone)
+        : toIcsDateTime(event.date, event.startTime);
   const dtEnd = event.allDay
     ? toIcsDate(event.endDate || nextDate(event.date))
-    : fixedOffsetMinutes === null
-      ? toIcsDateTime(event.date, event.endTime)
-      : toIcsUtcDateTime(event.date, event.endTime, fixedOffsetMinutes);
+    : fixedOffsetMinutes !== null
+      ? toIcsUtcDateTime(event.date, event.endTime, fixedOffsetMinutes)
+      : ianaTimezone
+        ? toIcsIanaUtcDateTime(event.date, event.endTime, eventTimezone)
+        : toIcsDateTime(event.date, event.endTime);
 
   if (!dtStart || !dtEnd) {
     return null;
   }
 
   const uid = `${crypto.randomUUID()}@calendar-ics-tool`;
-  const timezoneParameter = isIanaTimezone(eventTimezone) ? `;TZID=${eventTimezone}` : '';
 
   const lines = [
     'BEGIN:VEVENT',
     `UID:${uid}`,
     `DTSTAMP:${formatNowUtcStamp()}`,
-    event.allDay ? `DTSTART;VALUE=DATE:${dtStart}` : `DTSTART${timezoneParameter}:${dtStart}`,
-    event.allDay ? `DTEND;VALUE=DATE:${dtEnd}` : `DTEND${timezoneParameter}:${dtEnd}`,
+    event.allDay ? `DTSTART;VALUE=DATE:${dtStart}` : `DTSTART:${dtStart}`,
+    event.allDay ? `DTEND;VALUE=DATE:${dtEnd}` : `DTEND:${dtEnd}`,
     `SUMMARY:${escapeIcsText(event.title || 'Untitled Event')}`,
     `LOCATION:${escapeIcsText(event.location || '')}`,
     `DESCRIPTION:${escapeIcsText(event.description || '')}`
@@ -361,7 +401,6 @@ function makeCalendarIcs(events) {
     'VERSION:2.0',
     'PRODID:-//Calendar ICS Tool//EN',
     'CALSCALE:GREGORIAN',
-    `X-WR-TIMEZONE:${timezone}`,
     blocks,
     'END:VCALENDAR',
     ''
