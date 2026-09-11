@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="420" height="540" viewBox="0 0 420 540">
+  <defs>
+    <linearGradient id="edge" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="420" y2="0">
+      <stop offset="0" stop-color="white" stop-opacity="0"/>
+      <stop offset=".12" stop-color="white"/>
+      <stop offset="1" stop-color="white"/>
+    </linearGradient>
+    <filter id="tooth" x="-10%" y="-10%" width="120%" height="120%">
+      <feTurbulence type="fractalNoise" baseFrequency=".7" numOctaves="2" seed="4" result="grain"/>
+      <feDisplacementMap in="SourceGraphic" in2="grain" scale="1.5" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </defs>
+  <g fill="none" stroke="url(#edge)" stroke-linecap="round" stroke-linejoin="round" filter="url(#tooth)">
+    <path opacity=".8" stroke-width="2" d="M-16 85 Q71 107 153 151 T325 221 M-12 90 Q88 121 159 156 T321 225 M-21 160 Q75 186 155 223 T279 278 M-24 165 Q74 192 155 228 T275 283"/>
+    <path opacity=".5" stroke-width="3" d="M5 94 L-20 155 M19 99 L-8 163 M34 103 L7 169 M48 110 L21 174 M63 116 L38 181 M78 121 L52 186 M93 128 L68 193 M108 134 L84 199 M123 140 L99 205 M138 146 L114 213 M154 153 L130 219 M169 159 L146 226 M184 165 L161 231 M199 172 L177 238 M214 178 L193 245 M229 185 L208 250 M244 191 L224 257 M258 198 L240 264 M274 204 L257 271 M289 211 L273 276 M303 217 L287 279"/>
+    <path opacity=".35" stroke-width="1.5" d="M-9 132 L217 224 M-14 147 L229 248 M14 110 L295 236 M-10 271 Q78 303 226 369 M-13 277 Q78 309 221 374 M7 281 L-10 318 M20 287 L4 325 M34 293 L18 331 M47 299 L32 337 M61 305 L47 343 M76 311 L61 349 M91 317 L77 355 M106 324 L92 361 M122 331 L109 366 M138 338 L125 373 M154 345 L142 380 M170 352 L158 386 M187 360 L174 393 M203 367 L190 399"/>
+    <path opacity=".45" stroke-width="2" d="M-19 317 Q54 338 132 373 T209 407 M-15 323 Q57 344 137 380 T205 411"/>
+  </g>
+</svg>

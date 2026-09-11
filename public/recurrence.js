@@ -154,18 +154,18 @@ function refreshRecurrencePreview() {
   recurrenceFields.until.min = recurrenceFields.date.value;
   recurrenceFields.count.required = recurrenceFields.ending.value === 'count';
   recurrenceFields.count.disabled = recurrenceFields.ending.value !== 'count';
-  document.getElementById('recurrenceUnit').textContent = { DAILY: 'day(s)', WEEKLY: 'week(s)', MONTHLY: 'month(s)', QUARTERLY: 'quarter(s)', YEARLY: 'year(s)' }[frequency];
+  document.getElementById('recurrenceUnit').textContent = t({ DAILY: 'day(s)', WEEKLY: 'week(s)', MONTHLY: 'month(s)', QUARTERLY: 'quarter(s)', YEARLY: 'year(s)' }[frequency]);
   recurrencePreview.replaceChildren();
   try {
     const event = buildRecurringEvent(recurrenceSettings());
     recurrenceSummary.textContent = event.recurrence.summary;
     for (const date of event.recurrence.preview) {
       const item = document.createElement('li');
-      item.textContent = new Intl.DateTimeFormat(undefined, { dateStyle: 'full', timeZone: 'UTC' }).format(recurrenceDate(date));
+      item.textContent = new Intl.DateTimeFormat(window.calendarI18n.language, { dateStyle: 'full', timeZone: 'UTC' }).format(recurrenceDate(date));
       recurrencePreview.append(item);
     }
   } catch (error) {
-    recurrenceSummary.textContent = error.message;
+    recurrenceSummary.textContent = t(error.message);
   }
 }
 
@@ -174,8 +174,8 @@ function renderRecurrenceExclusions() {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'secondary-button';
-    button.textContent = `${date} / Remove`;
-    button.setAttribute('aria-label', `Remove skipped date ${date}`);
+    button.textContent = t('{date} / Remove', { date });
+    button.setAttribute('aria-label', t('Remove skipped date {date}', { date }));
     button.addEventListener('click', () => {
       recurrenceExcludedDates = recurrenceExcludedDates.filter((candidate) => candidate !== date);
       renderRecurrenceExclusions();
@@ -211,7 +211,7 @@ function setRecurrenceDateDefaults() {
 
 function cancelRecurrenceEdit() {
   recurrenceEditingEvent = null;
-  document.getElementById('recurrenceSave').textContent = 'Review recurring event';
+  document.getElementById('recurrenceSave').textContent = t('Review recurring event');
   document.getElementById('recurrenceCancel').hidden = true;
 }
 
@@ -371,7 +371,7 @@ document.getElementById('creationDetailsButton').addEventListener('click', () =>
 }, { capture: true });
 document.getElementById('recurrenceCancel').addEventListener('click', () => {
   cancelRecurrenceEdit();
-  recurrenceStatus.textContent = 'Edit canceled.';
+  recurrenceStatus.textContent = t('Edit canceled.');
 });
 document.getElementById('recurrenceAddSkip').addEventListener('click', () => {
   const input = document.getElementById('recurrenceSkipDate');
@@ -393,16 +393,16 @@ recurrenceForm.addEventListener('submit', (submitEvent) => {
     } else {
       state.events.push(event);
     }
-    recurrenceStatus.textContent = recurrenceEditingEvent ? 'Recurring event updated.' : 'Recurring event added.';
+    recurrenceStatus.textContent = t(recurrenceEditingEvent ? 'Recurring event updated.' : 'Recurring event added.');
     recurrenceEditingEvent = event;
-    document.getElementById('recurrenceSave').textContent = 'Save & review';
+    document.getElementById('recurrenceSave').textContent = t('Save & review');
     document.getElementById('recurrenceCancel').hidden = false;
     toggleEventsButton.setAttribute('aria-expanded', 'true');
     renderEvents();
     showWorkspaceView('review');
     setStatus(recurrenceStatus.textContent);
   } catch (error) {
-    recurrenceStatus.textContent = error.message;
+    recurrenceStatus.textContent = t(error.message);
   }
 });
 eventsContainer.addEventListener('click', (clickEvent) => {
@@ -411,7 +411,7 @@ eventsContainer.addEventListener('click', (clickEvent) => {
   recurrenceEditingEvent = state.events[Number(button.dataset.editRecurrence)];
   const settings = { ...recurrenceEditingEvent.recurrence.settings, title: recurrenceEditingEvent.title, location: recurrenceEditingEvent.location, description: recurrenceEditingEvent.description };
   fillRecurrenceSettings(settings);
-  document.getElementById('recurrenceSave').textContent = 'Save & review';
+  document.getElementById('recurrenceSave').textContent = t('Save & review');
   document.getElementById('recurrenceCancel').hidden = false;
   recurrenceStatus.textContent = '';
   showWorkspaceView('recurring');
@@ -423,3 +423,7 @@ recurrenceFields.date.value = `${recurrenceToday.getFullYear()}-${String(recurre
 recurrenceFields.timezone.value = Intl.DateTimeFormat().resolvedOptions().timeZone || defaultTimezone;
 setRecurrenceDateDefaults();
 refreshRecurrencePreview();
+document.addEventListener('languagechange', () => {
+  refreshRecurrencePreview();
+  renderRecurrenceExclusions();
+});

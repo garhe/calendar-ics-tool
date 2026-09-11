@@ -149,22 +149,39 @@ header {
 .brand-title {
   flex: 1;
   min-width: 0;
-  padding-right: 100px;
 }
 
-.theme-picker {
-  position: absolute;
-  top: 0;
-  right: 0;
+.header-actions {
+  position: relative;
   z-index: 20;
+  display: flex;
+  flex-shrink: 0;
+  align-items: stretch;
+  gap: 0.5rem;
 }
 
-.theme-picker summary {
+.theme-picker,
+.language-picker {
+  position: static;
+}
+
+.language-code {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.theme-picker summary,
+.language-picker summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
   list-style: none;
   cursor: pointer;
   color: var(--accent);
   font-size: 0.875rem;
   padding: 0.65rem 0.8rem;
+  height: 44px;
   min-height: 44px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -172,15 +189,18 @@ header {
   transition: background 180ms ease, border-color 180ms ease, box-shadow 200ms var(--ease-out);
 }
 
-.theme-picker summary::-webkit-details-marker {
+.theme-picker summary::-webkit-details-marker,
+.language-picker summary::-webkit-details-marker {
   display: none;
 }
 
-.theme-picker summary:hover {
+.theme-picker summary:hover,
+.language-picker summary:hover {
   background: var(--accent-soft);
 }
 
-.theme-picker summary:focus-visible {
+.theme-picker summary:focus-visible,
+.language-picker summary:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
@@ -201,13 +221,39 @@ header {
   right: 0;
   top: calc(100% + 0.5rem);
   width: 296px;
-  max-width: calc(100vw - 2rem);
+  max-width: calc(100vw - 3rem);
   padding: 1rem;
   background: var(--paper);
   border: 1px solid var(--line);
   border-radius: 8px;
   box-shadow: 0 12px 32px rgb(36 44 44 / 12%);
   animation: surface-enter 180ms var(--ease-out) both;
+}
+
+.language-options {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.5rem);
+  width: 190px;
+  max-width: calc(100vw - 3rem);
+  padding: 1rem;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgb(36 44 44 / 12%);
+  animation: surface-enter 180ms var(--ease-out) both;
+}
+
+.language-options fieldset {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+}
+
+.language-options fieldset label {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.6rem 0.7rem;
 }
 
 .theme-options fieldset {
@@ -219,6 +265,7 @@ header {
 
 .theme-column {
   display: grid;
+  grid-template-rows: 48px repeat(3, 44px);
   justify-items: center;
   gap: 0.35rem;
   min-width: 0;
@@ -226,6 +273,9 @@ header {
 
 .theme-color-name {
   font-size: 0.7rem;
+  line-height: 1.3;
+  text-align: center;
+  align-self: center;
   color: var(--muted);
 }
 
@@ -234,6 +284,7 @@ header {
   display: grid;
   place-items: center;
   width: 44px;
+  max-width: 100%;
   height: 44px;
   padding: 3px;
   border: 0;
@@ -254,7 +305,8 @@ header {
   width: 34px;
   height: 34px;
   border-radius: 6px;
-  background: var(--swatch);
+  background: var(--material-texture, none), var(--swatch);
+  box-shadow: var(--material-edge, none);
   pointer-events: none;
   transition: transform 180ms var(--ease-spring), box-shadow 180ms ease;
 }
@@ -264,7 +316,7 @@ header {
 }
 
 .theme-swatch input:checked + span {
-  box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--accent);
+  box-shadow: var(--material-edge, inset 0 0 0 transparent), 0 0 0 2px var(--paper), 0 0 0 4px var(--accent);
 }
 
 .theme-swatch input:checked + span::after {
@@ -650,16 +702,31 @@ input[type="radio"] {
 }
 
 .theme-picker summary,
+.language-picker summary,
 .paste-zone {
   position: relative;
   isolation: isolate;
   overflow: hidden;
 }
 
+@media (max-width: 760px) {
+  .brand-title {
+    flex-basis: calc(100% - 68px);
+    padding-right: 0;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
 .theme-picker summary,
+.language-picker summary,
 .secondary-button,
 .paste-zone,
 .theme-options,
+.language-options,
 .timezone-options {
   background: linear-gradient(145deg, rgb(255 255 255 / 95%), var(--glass-tint)), var(--paper);
   box-shadow: inset 0 1px 0 #fff, inset 0 -1px 0 rgb(255 255 255 / 65%),
@@ -729,6 +796,8 @@ select {
 
 .theme-picker summary:hover,
 .theme-picker[open] summary,
+.language-picker summary:hover,
+.language-picker[open] summary,
 select:hover:not(:disabled),
 select:open,
 .secondary-button:hover:not(:disabled),
@@ -743,14 +812,50 @@ select:open,
 
 @supports ((backdrop-filter: blur(16px)) or (-webkit-backdrop-filter: blur(16px))) {
   .theme-picker summary,
+  .language-picker summary,
   .secondary-button,
   .paste-zone,
   .theme-options,
+  .language-options,
   .timezone-options {
     -webkit-backdrop-filter: blur(16px) saturate(125%);
     backdrop-filter: blur(16px) saturate(125%);
     background: linear-gradient(125deg, rgb(255 255 255 / 86%), var(--glass-tint) 65%, var(--glass-counter-tint)),
       rgb(255 255 255 / 65%);
+  }
+
+  .theme-options,
+  .language-options,
+  .timezone-options {
+    --flyout-glass: linear-gradient(145deg, rgb(255 255 255 / 28%), rgb(255 255 255 / 6%) 38%, color-mix(in srgb, var(--glass-tint) 45%, transparent) 75%, rgb(255 255 255 / 18%));
+    --flyout-shadow: inset 0 1px 0 rgb(255 255 255 / 95%), inset 1px 0 0 rgb(255 255 255 / 55%), inset 0 -1px 0 rgb(255 255 255 / 65%), inset 0 0 18px rgb(255 255 255 / 20%), 0 14px 36px rgb(36 44 44 / 16%);
+    background: var(--flyout-glass);
+    border-color: rgb(255 255 255 / 65%);
+    box-shadow: var(--flyout-shadow);
+    -webkit-backdrop-filter: blur(2.5px) saturate(125%);
+    backdrop-filter: blur(2.5px) saturate(125%);
+  }
+
+  .language-options fieldset label {
+    background: rgb(255 255 255 / 16%);
+    border-color: rgb(255 255 255 / 45%);
+  }
+
+  .language-options fieldset label:hover,
+  .language-options fieldset label:has(input:checked) {
+    color: var(--accent);
+    background: linear-gradient(125deg, rgb(255 255 255 / 42%), var(--glass-tint));
+    border-color: var(--accent-border);
+  }
+
+  @supports (appearance: base-select) {
+    select::picker(select) {
+      background: linear-gradient(145deg, rgb(255 255 255 / 28%), rgb(255 255 255 / 6%) 38%, color-mix(in srgb, var(--glass-tint) 45%, transparent) 75%, rgb(255 255 255 / 18%));
+      border-color: rgb(255 255 255 / 65%);
+      box-shadow: inset 0 1px 0 rgb(255 255 255 / 95%), inset 1px 0 0 rgb(255 255 255 / 55%), inset 0 -1px 0 rgb(255 255 255 / 65%), inset 0 0 18px rgb(255 255 255 / 20%), 0 14px 36px rgb(36 44 44 / 16%);
+      -webkit-backdrop-filter: blur(2.5px) saturate(125%);
+      backdrop-filter: blur(2.5px) saturate(125%);
+    }
   }
 }
 
@@ -769,6 +874,7 @@ button:not(.secondary-button):not(.timezone-option) {
 
 button:not(.timezone-option)::before,
 .theme-picker summary::before,
+.language-picker summary::before,
 .paste-zone::before {
   content: "";
   position: absolute;
@@ -782,6 +888,7 @@ button:not(.timezone-option)::before,
 @media (hover: hover) and (pointer: fine) {
   button:not(:disabled):hover::before,
   .theme-picker summary:hover::before,
+  .language-picker summary:hover::before,
   .paste-zone:hover::before {
     animation: glass-sheen 650ms var(--ease-out) both;
   }
@@ -919,9 +1026,11 @@ input[type="checkbox"] {
   select,
   select::picker(select),
   .theme-picker summary,
+  .language-picker summary,
   .secondary-button,
   .paste-zone,
   .theme-options,
+  .language-options,
   .timezone-options,
   textarea,
   input,
@@ -962,15 +1071,13 @@ input[type="checkbox"] {
     font-size: 1.4rem;
   }
 
-  .theme-picker {
-    top: 1rem;
-  }
-
-  .theme-picker summary {
+  .theme-picker summary,
+  .language-picker summary {
     width: max-content;
   }
 
-  .theme-options {
+  .theme-options,
+  .language-options {
     right: 0;
     left: auto;
   }
@@ -993,5 +1100,327 @@ input[type="checkbox"] {
 
   .lunar-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+.custom-color-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-top: 1px solid var(--line);
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+}
+
+@media (max-width: 380px) {
+  .theme-options {
+    padding: 0.75rem;
+  }
+}
+
+.custom-color-control input {
+  width: 52px;
+  height: 44px;
+  flex: 0 0 52px;
+  padding: 3px;
+  border: 1px solid var(--accent-border);
+  border-radius: 6px;
+  background: var(--paper);
+  cursor: pointer;
+}
+
+.custom-color-control input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+#interfacePicker .language-options {
+  width: 244px;
+}
+
+.style-preview {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  border: 1px solid var(--accent-border);
+  border-radius: 4px;
+}
+
+.style-preview-glass {
+  background: linear-gradient(135deg, #fff, var(--glass-tint), rgb(255 255 255 / 25%));
+  box-shadow: inset 0 1px 2px #fff;
+}
+
+.style-preview-watercolor {
+  background: linear-gradient(25deg, var(--background-tint), transparent 75%),
+    repeating-linear-gradient(110deg, transparent 0 2px, var(--glass-tint) 3px 4px), var(--paper);
+}
+
+.style-preview-sketch {
+  border: 1px solid var(--accent-border);
+  background: var(--paper);
+  box-shadow: 1px 1px 0 var(--accent-ring);
+}
+
+:root[data-interface-style="watercolor"] body::before {
+  background-image: var(--pigment-grain),
+    linear-gradient(165deg, var(--background-tint), transparent 65%),
+    linear-gradient(25deg, var(--background-counter), var(--paper) 60%, var(--wash));
+  background-size: 128px 128px, 100% 100%, 100% 100%;
+  background-repeat: repeat, no-repeat, no-repeat;
+}
+
+:root[data-interface-style="sketch"] body::before {
+  background-image: linear-gradient(135deg, var(--wash), var(--bg) 50%, var(--background-counter));
+}
+
+#backgroundArtwork {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  width: 100%;
+  height: 100dvh;
+  pointer-events: none;
+}
+
+:root[data-interface-style="glass"] #backgroundArtwork {
+  filter: blur(5px);
+  transform: scale(1.025);
+}
+
+#artworkControls {
+  border-top: 1px solid var(--accent-border);
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+}
+
+#interfacePicker .language-options {
+  max-height: calc(100dvh - 180px);
+  overflow-y: auto;
+}
+
+:root[data-interface-style="watercolor"] :is(.header-actions summary, .secondary-button, .paste-zone, .theme-options, .language-options, .timezone-options, select, textarea, input:not([type="radio"]):not([type="checkbox"]):not([type="color"]), .event-card) {
+  background: linear-gradient(145deg, rgb(255 255 255 / 75%), var(--glass-tint)), var(--paper);
+  border-color: var(--accent-border);
+  box-shadow: inset 0 0 14px var(--accent-ring), 0 3px 10px var(--accent-ring);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+:root[data-interface-style="watercolor"] .panel {
+  border-top: 2px solid var(--accent-border);
+}
+
+:root[data-interface-style="sketch"] :is(.header-actions summary, button, .paste-zone, .theme-options, .language-options, .timezone-options, select, textarea, input:not([type="radio"]):not([type="checkbox"]):not([type="color"]), .event-card, fieldset label) {
+  border: 1px solid var(--accent-border);
+  border-radius: 3px;
+  box-shadow: 1px 1px 0 var(--accent-ring);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+:root[data-interface-style="sketch"] :is(.header-actions summary, .secondary-button, .paste-zone, .theme-options, .language-options, .timezone-options, select, textarea, input:not([type="radio"]):not([type="checkbox"]):not([type="color"]), .event-card) {
+  background: var(--paper);
+}
+
+:root[data-interface-style="sketch"] :is(.panel, .export-options, .recurrence-text-form) {
+  border: 0;
+}
+
+:root[data-interface-style="sketch"] :is(.panel, .export-options) {
+  border-top: 1px solid var(--accent-border);
+}
+
+:root[data-interface-style="sketch"] .recurrence-text-form {
+  border-bottom: 1px solid var(--accent-border);
+}
+
+:root[data-interface-style="watercolor"] {
+  --handwritten-font: "Kalam", "Patrick Hand", "Ma Shan Zheng", "KaiTi", cursive;
+}
+
+:root[data-interface-style="sketch"] {
+  --handwritten-font: "Patrick Hand", "Ma Shan Zheng", "KaiTi", cursive;
+}
+
+:root:is([data-interface-style="watercolor"], [data-interface-style="sketch"]) :is(body, h1, h2, h3) {
+  font-family: var(--handwritten-font);
+}
+
+:root:is([data-interface-style="watercolor"], [data-interface-style="sketch"]) body {
+  font-size: 1.0625rem;
+  line-height: 1.6;
+}
+
+:root:is([data-interface-style="watercolor"], [data-interface-style="sketch"]) :is(label, button, .header-actions summary) {
+  font-size: 1rem;
+}
+
+:root[data-interface-style="watercolor"] :is(h1, h2, h3) {
+  font-weight: 700;
+}
+
+:root[data-interface-style="sketch"] :is(h1, h2, h3, label, button, summary) {
+  font-weight: 400;
+}
+
+:root:is([data-interface-style="watercolor"], [data-interface-style="sketch"]) .eyebrow {
+  text-transform: none;
+  font-size: 0.9375rem;
+}
+
+:root:is([data-interface-style="watercolor"], [data-interface-style="sketch"]) :is(.theme-swatch, .recurrence-choices label) {
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+:root:is([data-interface-style="watercolor"], [data-interface-style="sketch"]) :is(.language-options label:has(input:checked), .header-actions details[open] summary, .secondary-button:hover, .creation-steps [aria-current="step"], .timezone-option[aria-selected="true"]) {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+:root:is([data-interface-style="watercolor"], [data-interface-style="sketch"]) :is(button, .header-actions summary, .paste-zone)::before {
+  display: none;
+}
+
+@supports (appearance: base-select) {
+  :root[data-interface-style="watercolor"] select::picker(select) {
+    background: linear-gradient(145deg, rgb(255 255 255 / 75%), var(--glass-tint)), var(--paper);
+    border-color: var(--accent-border);
+    box-shadow: inset 0 0 14px var(--accent-ring), 0 3px 10px var(--accent-ring);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  :root[data-interface-style="sketch"] select::picker(select) {
+    background: var(--paper);
+    border: 1px solid var(--accent-border);
+    border-radius: 3px;
+    box-shadow: 1px 1px 0 var(--accent-ring);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  :root:is([data-interface-style="watercolor"], [data-interface-style="sketch"]) select option:checked {
+    background: var(--accent-soft);
+  }
+}
+
+:root[data-interface-style="glass"],
+.style-preview-glass {
+  --material-texture: linear-gradient(135deg, rgb(255 255 255 / 65%), rgb(255 255 255 / 5%) 40%, transparent 55%, rgb(255 255 255 / 24%));
+  --material-ink-texture: linear-gradient(135deg, rgb(255 255 255 / 12%), transparent 45%, rgb(255 255 255 / 6%));
+  --material-edge: inset 0 1px 1px rgb(255 255 255 / 85%), inset 1px 0 0 rgb(255 255 255 / 40%), inset 0 -1px 2px rgb(0 0 0 / 12%);
+}
+
+:root[data-interface-style="watercolor"],
+.style-preview-watercolor {
+  --pigment-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='128'%3E%3Cfilter id='grain' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.4' numOctaves='3' stitchTiles='stitch' seed='7'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='linear' slope='.24'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='128' height='128' filter='url(%23grain)'/%3E%3C/svg%3E");
+  --material-texture: var(--pigment-grain), linear-gradient(155deg, rgb(255 255 255 / 48%), transparent 38%, rgb(255 255 255 / 26%) 72%, transparent);
+  --material-ink-texture: var(--pigment-grain), linear-gradient(155deg, rgb(255 255 255 / 10%), transparent 45%);
+  --material-edge: inset 0 0 5px rgb(0 0 0 / 16%), inset 1px 1px 3px rgb(255 255 255 / 28%);
+}
+
+:root[data-interface-style="sketch"],
+.style-preview-sketch {
+  --material-texture: repeating-linear-gradient(128deg, rgb(255 255 255 / 45%) 0 1px, transparent 1px 3px), repeating-linear-gradient(122deg, transparent 0 5px, rgb(255 255 255 / 28%) 5px 6px);
+  --material-ink-texture: repeating-linear-gradient(128deg, rgb(255 255 255 / 10%) 0 1px, transparent 1px 3px);
+  --material-edge: inset 0 0 0 1px rgb(0 0 0 / 18%), inset 1px 1px 0 rgb(255 255 255 / 55%);
+}
+
+.theme-preview,
+.style-preview {
+  background: var(--material-texture, none), var(--theme-swatch);
+  box-shadow: var(--material-edge, none);
+}
+
+:root[data-interface-style="glass"] .theme-swatch span,
+:root[data-interface-style="glass"] .theme-preview {
+  background: var(--material-texture), color-mix(in srgb, var(--swatch, var(--theme-swatch)) 65%, transparent);
+}
+
+:root[data-interface-style="watercolor"] .theme-swatch span {
+  border-radius: 5px 3px 6px 4px;
+}
+
+:root[data-interface-style="sketch"] .theme-swatch span {
+  border-radius: 2px;
+}
+
+.custom-color-control input::-webkit-color-swatch {
+  background-image: var(--material-texture);
+  border: 0;
+  border-radius: 3px;
+  box-shadow: var(--material-edge);
+}
+
+.custom-color-control input::-moz-color-swatch {
+  background-image: var(--material-texture);
+  border: 0;
+  border-radius: 3px;
+  box-shadow: var(--material-edge);
+}
+
+:root[data-interface-style] button:not(.secondary-button):not(.timezone-option) {
+  background-image: var(--material-ink-texture);
+  box-shadow: var(--material-edge), 0 2px 4px var(--accent-ring);
+}
+
+:root[data-interface-style] :is(fieldset label:has(> input:checked), .language-options fieldset label:has(input:checked), .creation-steps [aria-current="step"], .header-actions details[open] summary, .timezone-option[aria-selected="true"], #status:not(:empty)):not(.theme-swatch) {
+  color: var(--accent);
+  background: var(--material-texture), var(--accent-soft);
+  box-shadow: var(--material-edge);
+}
+
+:root[data-interface-style="glass"] :is(.event-card, input[type="text"], input[type="date"], input[type="time"], input[type="number"], textarea, .custom-color-control input) {
+  background: linear-gradient(135deg, rgb(255 255 255 / 78%), rgb(255 255 255 / 40%)), var(--glass-tint);
+  box-shadow: var(--material-edge);
+}
+
+:root[data-interface-style="watercolor"] :is(.header-actions summary, .secondary-button, .paste-zone, select, .custom-color-control input, fieldset label:not(.theme-swatch)) {
+  background: var(--material-texture), var(--accent-soft);
+  box-shadow: var(--material-edge);
+}
+
+:root[data-interface-style="watercolor"] :is(.event-card, .theme-options, .language-options, .timezone-options, input[type="text"], input[type="date"], input[type="time"], input[type="number"], textarea) {
+  background: var(--material-texture), linear-gradient(155deg, var(--paper) 40%, var(--wash));
+  box-shadow: inset 0 0 8px var(--accent-ring), 0 2px 5px var(--accent-ring);
+}
+
+:root[data-interface-style="sketch"] :is(.header-actions summary, .secondary-button, .custom-color-control input) {
+  background: var(--material-texture), var(--accent-soft);
+}
+
+:root[data-interface-style="sketch"] :is(.event-card, .paste-zone, input[type="text"], input[type="date"], input[type="time"], input[type="number"], textarea, select, fieldset label:not(.theme-swatch)) {
+  border-color: var(--accent-border);
+  box-shadow: inset 0 -1px 0 var(--accent-ring), 1px 1px 0 var(--accent-ring);
+}
+
+:root[data-interface-style] :is(.secondary-button:hover:not(:disabled), .language-options label:hover, .timezone-option:hover) {
+  background: var(--material-texture), var(--accent-soft);
+}
+
+@supports (appearance: base-select) {
+  :root[data-interface-style] :is(select option:hover, select option:focus, select option:checked) {
+    background: var(--material-texture), var(--accent-soft);
+    box-shadow: var(--material-edge);
+  }
+
+  :root[data-interface-style="watercolor"] select::picker(select) {
+    background: var(--material-texture), linear-gradient(155deg, var(--paper) 40%, var(--wash));
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-interface-style="glass"] :is(.event-card, input[type="text"], input[type="date"], input[type="time"], input[type="number"], textarea, .custom-color-control input) {
+    background: var(--paper);
+  }
+
+  :root[data-interface-style="glass"] .theme-swatch span,
+  :root[data-interface-style="glass"] .theme-preview {
+    background: var(--material-texture), var(--swatch, var(--theme-swatch));
   }
 }

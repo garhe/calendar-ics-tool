@@ -24,6 +24,8 @@ const themePicker = document.getElementById('themePicker');
 const themeSwatches = document.getElementById('themeSwatches');
 const themeCurrent = document.getElementById('themeCurrent');
 const themeStorageKey = 'calendar-ics-theme';
+const customColorInput = document.getElementById('customColor');
+const interfaceStorageKey = 'calendar-ics-interface-style';
 const themeColors = [
   { id: 'sage', name: 'Sage', hue: 145, saturation: 22 },
   { id: 'lagoon', name: 'Lagoon', hue: 172, saturation: 40 },
@@ -75,25 +77,50 @@ fetch(calendarLogo.getAttribute('src'))
   })
   .catch(() => {});
 
-function applyTheme(colorId, shadeIndex, persist = false) {
-  const color = themeColors.find((candidate) => candidate.id === colorId) || themeColors[1];
+function customColorFromHex(hex) {
+  const channels = hex.slice(1).match(/.{2}/g).map((channel) => parseInt(channel, 16) / 255);
+  const [red, green, blue] = channels;
+  const maximum = Math.max(...channels);
+  const minimum = Math.min(...channels);
+  const difference = maximum - minimum;
+  const lightness = (maximum + minimum) / 2;
+  let hue = 0;
+  if (difference) {
+    if (maximum === red) hue = ((green - blue) / difference) % 6;
+    else if (maximum === green) hue = (blue - red) / difference + 2;
+    else hue = (red - green) / difference + 4;
+  }
+  return {
+    id: 'custom', name: 'Custom', hex,
+    hue: (hue * 60 + 360) % 360,
+    saturation: difference ? difference / (1 - Math.abs(2 * lightness - 1)) * 100 : 0,
+    lightness: lightness * 100
+  };
+}
+
+function applyTheme(colorId, shadeIndex, persist = false, customHex = customColorInput.value) {
+  const validHex = /^#[0-9a-f]{6}$/i.test(customHex) ? customHex : '#419884';
+  const color = colorId === 'custom' ? customColorFromHex(validHex)
+    : themeColors.find((candidate) => candidate.id === colorId) || themeColors[1];
   const shade = Number.isInteger(shadeIndex) && shadeIndex >= 0 && shadeIndex < themeShades.length
     ? shadeIndex : 1;
   const tone = (lightness, saturation = color.saturation) => `hsl(${color.hue} ${saturation}% ${lightness}%)`;
+  const accentLightness = color.id === 'custom' ? Math.min(28, color.lightness) : 32 - shade * 4;
+  const tintSaturation = color.id === 'custom' ? color.saturation : 42;
   const tokens = {
-    '--theme-swatch': tone(82 - shade * 16),
-    '--accent': tone(32 - shade * 4),
-    '--accent-hover': tone(26 - shade * 4),
+    '--theme-swatch': color.hex || tone(82 - shade * 16),
+    '--accent': tone(accentLightness),
+    '--accent-hover': tone(Math.max(0, accentLightness - 6)),
     '--accent-soft': tone(95 - shade * 3),
     '--accent-border': tone(66 - shade * 5),
     '--accent-ring': `hsl(${color.hue} ${color.saturation}% 40% / 0.14)`,
     '--selection': tone(84 - shade * 4),
     '--wash': tone(97 - shade * 3),
-    '--background-tint': tone(91 - shade * 4, 42),
-    '--background-counter': `hsl(${(color.hue + 85) % 360} 38% ${94 - shade * 3}%)`,
-    '--glass-tint': `hsl(${color.hue} 42% ${84 - shade * 6}% / 0.38)`,
-    '--glass-counter-tint': `hsl(${(color.hue + 85) % 360} 38% 86% / 0.28)`,
-    '--bg': tone(98 - shade, 12)
+    '--background-tint': tone(91 - shade * 4, tintSaturation),
+    '--background-counter': `hsl(${(color.hue + 85) % 360} ${Math.min(38, tintSaturation)}% ${94 - shade * 3}%)`,
+    '--glass-tint': `hsl(${color.hue} ${tintSaturation}% ${84 - shade * 6}% / 0.38)`,
+    '--glass-counter-tint': `hsl(${(color.hue + 85) % 360} ${Math.min(38, tintSaturation)}% 86% / 0.28)`,
+    '--bg': tone(98 - shade, Math.min(12, tintSaturation))
   };
   for (const [property, value] of Object.entries(tokens)) {
     document.documentElement.style.setProperty(property, value);
@@ -102,12 +129,23 @@ function applyTheme(colorId, shadeIndex, persist = false) {
   updateCalendarLogo();
   themeSwatches.querySelectorAll('input').forEach((input) => {
     input.checked = input.value === `${color.id}-${shade}`;
+    const [swatchColorId, swatchShadeIndex] = input.value.split('-');
+    const swatchColor = themeColors.find((candidate) => candidate.id === swatchColorId);
+    const accessibleName = `${t(swatchColor.name)} / ${t(themeShades[Number(swatchShadeIndex)])}`;
+    input.setAttribute('aria-label', accessibleName);
+    input.closest('label').title = accessibleName;
   });
-  themeCurrent.textContent = `${color.name} / ${themeShades[shade]}`;
-  document.querySelector('meta[name="theme-color"]').content = tone(32 - shade * 4);
+  themeSwatches.querySelectorAll('.theme-color-name').forEach((name, index) => {
+    name.dataset.i18nSource = themeColors[index].name;
+    name.textContent = t(themeColors[index].name);
+  });
+  customColorInput.value = validHex;
+  themeCurrent.textContent = color.hex ? `${t('Custom')} / ${color.hex.toUpperCase()}`
+    : `${t(color.name)} / ${t(themeShades[shade])}`;
+  document.querySelector('meta[name="theme-color"]').content = tone(accentLightness);
   if (persist) {
     try {
-      localStorage.setItem(themeStorageKey, JSON.stringify({ color: color.id, shade }));
+      localStorage.setItem(themeStorageKey, JSON.stringify({ color: color.id, shade, customHex: validHex }));
     } catch {
       themeCurrent.textContent += ' (this visit only)';
     }
@@ -119,7 +157,7 @@ for (const color of themeColors) {
   column.className = 'theme-column';
   const name = document.createElement('span');
   name.className = 'theme-color-name';
-  name.textContent = color.name;
+  name.textContent = t(color.name);
   column.append(name);
   themeShades.forEach((shade, index) => {
     const label = document.createElement('label');
@@ -146,15 +184,45 @@ try {
 } catch {
   savedTheme = null;
 }
-applyTheme(savedTheme?.color, savedTheme?.shade);
+applyTheme(savedTheme?.color, savedTheme?.shade, false, savedTheme?.customHex);
+customColorInput.addEventListener('input', () => applyTheme('custom', activeTheme.shade, true));
+customColorInput.addEventListener('change', () => applyTheme('custom', activeTheme.shade, true));
 
-document.addEventListener('pointerdown', (event) => {
-  if (!themePicker.contains(event.target)) themePicker.open = false;
+function applyInterfaceStyle(style, persist = false) {
+  const selectedStyle = ['glass', 'watercolor', 'sketch'].includes(style) ? style : 'glass';
+  document.documentElement.dataset.interfaceStyle = selectedStyle;
+  document.querySelectorAll('input[name="interfaceStyle"]').forEach((input) => {
+    input.checked = input.value === selectedStyle;
+  });
+  if (persist) {
+    try { localStorage.setItem(interfaceStorageKey, selectedStyle); } catch {}
+  }
+}
+
+let savedInterfaceStyle = 'glass';
+try { savedInterfaceStyle = localStorage.getItem(interfaceStorageKey); } catch {}
+applyInterfaceStyle(savedInterfaceStyle);
+document.getElementById('interfaceChoices').addEventListener('change', (event) => {
+  if (event.target.matches('input[name="interfaceStyle"]')) applyInterfaceStyle(event.target.value, true);
 });
-themePicker.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape') {
-    themePicker.open = false;
-    themePicker.querySelector('summary').focus();
+
+const headerPickers = [...document.querySelectorAll('.header-actions details')];
+for (const picker of headerPickers) {
+  picker.addEventListener('toggle', () => {
+    if (!picker.open) return;
+    for (const other of headerPickers) {
+      if (other !== picker) other.open = false;
+    }
+  });
+  picker.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    picker.open = false;
+    picker.querySelector('summary').focus();
+  });
+}
+document.addEventListener('pointerdown', (event) => {
+  for (const picker of headerPickers) {
+    if (!picker.contains(event.target)) picker.open = false;
   }
 });
 
@@ -168,7 +236,7 @@ function showButtonRipple(event) {
   if (event.type === 'pointerdown' && (event.button !== 0 || !event.isPrimary)) return;
   if (event.type === 'click' && event.detail !== 0) return;
 
-  const button = event.target.closest('button, .paste-zone, .theme-picker summary');
+  const button = event.target.closest('button, .paste-zone, .theme-picker summary, .language-picker summary');
   if (!button || button.disabled) return;
 
   const bounds = button.getBoundingClientRect();
@@ -943,10 +1011,13 @@ function renderEvents() {
   addEventButton.hidden = activeCreation !== 'source';
   const expanded = toggleEventsButton.getAttribute('aria-expanded') === 'true';
   eventsRegion.hidden = !expanded;
-  toggleEventsButton.textContent = `${expanded ? 'Hide' : 'Show'} events (${state.events.length})`;
+  toggleEventsButton.textContent = t(`${expanded ? 'Hide' : 'Show'} events ({count})`, { count: state.events.length });
 
   if (state.events.length === 0) {
-    eventsContainer.innerHTML = '<p class="hint">No events yet. Extract from text or add one manually.</p>';
+    const emptyMessage = document.createElement('p');
+    emptyMessage.className = 'hint';
+    emptyMessage.textContent = t('No events yet. Extract from text or add one manually.');
+    eventsContainer.append(emptyMessage);
     return;
   }
 
@@ -955,22 +1026,22 @@ function renderEvents() {
     card.className = 'event-card';
     card.innerHTML = `
       <div class="event-head">
-        <strong>Event ${index + 1}</strong>
-        <button type="button" data-remove="${index}">Remove</button>
+        <strong>${t('Event {number}', { number: index + 1 })}</strong>
+        <button type="button" data-remove="${index}">${t('Remove')}</button>
       </div>
-      <label>Title<input data-key="title" data-index="${index}" type="text" value="${escapeHtml(event.title)}"></label>
-      ${event.recurrence ? `<div class="recurrence-review"><p>${escapeHtml(event.recurrence.summary)}</p><button type="button" class="secondary-button" data-edit-recurrence="${index}">Edit recurrence</button></div><fieldset disabled>` : ''}
+      <label>${t('Title')}<input data-key="title" data-index="${index}" type="text" value="${escapeHtml(event.title)}"></label>
+      ${event.recurrence ? `<div class="recurrence-review"><p>${escapeHtml(event.recurrence.summary)}</p><button type="button" class="secondary-button" data-edit-recurrence="${index}">${t('Edit recurrence')}</button></div><fieldset disabled>` : ''}
       <div class="event-grid">
-        <label>Date<input data-key="date" data-index="${index}" type="date" value="${escapeHtml(event.date)}"></label>
-        <label>Location<input data-key="location" data-index="${index}" type="text" value="${escapeHtml(event.location)}"></label>
+        <label>${t('Date')}<input data-key="date" data-index="${index}" type="date" value="${escapeHtml(event.date)}"></label>
+        <label>${t('Location')}<input data-key="location" data-index="${index}" type="text" value="${escapeHtml(event.location)}"></label>
         ${event.allDay
-          ? '<div class="all-day-label">All-day event</div>'
-          : `<label>Start<input data-key="startTime" data-index="${index}" type="time" value="${escapeHtml(event.startTime)}"></label>
-             <label>End<input data-key="endTime" data-index="${index}" type="time" value="${escapeHtml(event.endTime)}"></label>
-             <label class="timezone-field">Timezone (required)<input id="eventTimezone-${index}" data-timezone-input data-key="timezone" data-index="${index}" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="eventTimezoneOptions-${index}" autocomplete="off" required placeholder="City or UTC offset" value="${escapeHtml(event.timezone)}"><div id="eventTimezoneOptions-${index}" class="timezone-options" role="listbox" hidden></div></label>`}
+          ? `<div class="all-day-label">${t('All-day event')}</div>`
+          : `<label>${t('Start')}<input data-key="startTime" data-index="${index}" type="time" value="${escapeHtml(event.startTime)}"></label>
+             <label>${t('End')}<input data-key="endTime" data-index="${index}" type="time" value="${escapeHtml(event.endTime)}"></label>
+             <label class="timezone-field">${t('Timezone (required)')}<input id="eventTimezone-${index}" data-timezone-input data-key="timezone" data-index="${index}" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="eventTimezoneOptions-${index}" autocomplete="off" required placeholder="${t('City or UTC offset')}" value="${escapeHtml(event.timezone)}"><div id="eventTimezoneOptions-${index}" class="timezone-options" role="listbox" hidden></div></label>`}
       </div>
       ${event.recurrence ? '</fieldset>' : ''}
-      <label>Description<input data-key="description" data-index="${index}" type="text" value="${escapeHtml(event.description)}"></label>
+      <label>${t('Description')}<input data-key="description" data-index="${index}" type="text" value="${escapeHtml(event.description)}"></label>
     `;
 
     eventsContainer.appendChild(card);
@@ -981,7 +1052,7 @@ toggleEventsButton.addEventListener('click', () => {
   const expanded = toggleEventsButton.getAttribute('aria-expanded') === 'true';
   toggleEventsButton.setAttribute('aria-expanded', String(!expanded));
   eventsRegion.hidden = expanded;
-  toggleEventsButton.textContent = `${expanded ? 'Show' : 'Hide'} events (${state.events.length})`;
+  toggleEventsButton.textContent = t(`${expanded ? 'Show' : 'Hide'} events ({count})`, { count: state.events.length });
 });
 
 function escapeHtml(value) {
@@ -1014,13 +1085,13 @@ document.addEventListener('paste', (event) => {
         imagePreview.hidden = false;
         ocrButton.disabled = false;
         showWorkspaceView('source');
-        setStatus('Screenshot ready.');
+        setStatus(t('Screenshot ready.'));
       };
       img.onerror = () => {
         URL.revokeObjectURL(url);
         if (pastedImageBlob !== imageBlob) return;
         removeScreenshotButton.click();
-        setStatus('Unable to read this screenshot. Try another image.');
+        setStatus(t('Unable to read this screenshot. Try another image.'));
       };
       img.src = url;
       event.preventDefault();
@@ -1036,14 +1107,14 @@ removeScreenshotButton.addEventListener('click', () => {
   imagePreview.height = 0;
   ocrButton.disabled = true;
   removeScreenshotButton.hidden = true;
-  setStatus('Screenshot removed.');
+  setStatus(t('Screenshot removed.'));
   pasteZone.focus();
 });
 
 parseButton.addEventListener('click', () => {
   const text = rawText.value.trim();
   if (!text) {
-    setStatus('Paste or type event text first.');
+    setStatus(t('Paste or type event text first.'));
     return;
   }
 
@@ -1053,7 +1124,7 @@ parseButton.addEventListener('click', () => {
   renderEvents();
   showWorkspaceView('review');
 
-  setStatus(`Extracted ${state.events.length} event(s). Review and edit before export.`);
+  setStatus(t('Extracted {count} event(s). Review and edit before export.', { count: state.events.length }));
 });
 
 document.addEventListener('input', (event) => {
@@ -1093,16 +1164,16 @@ addEventButton.addEventListener('click', () => {
 });
 
 generateBirthdayButton.addEventListener('click', () => {
-  const name = birthdayName.value.trim();
+  const eventTitle = birthdayName.value.trim();
   const enteredLunarBirthDate = parseCalendarDate(lunarBirthday.value);
 
-  if (!name || !enteredLunarBirthDate) {
-    lunarStatus.textContent = 'Enter a name and lunar event date as DD-MM-YYYY.';
+  if (!eventTitle || !enteredLunarBirthDate) {
+    lunarStatus.textContent = t('Enter an event title and lunar date as DD-MM-YYYY.');
     return;
   }
 
   if (typeof Solar === 'undefined' || typeof Lunar === 'undefined') {
-    lunarStatus.textContent = 'The lunar calendar library did not load. Check your internet connection and reload.';
+    lunarStatus.textContent = t('The lunar calendar library did not load. Check your internet connection and reload.');
     return;
   }
 
@@ -1114,7 +1185,7 @@ generateBirthdayButton.addEventListener('click', () => {
       enteredLunarBirthDate.day
     );
   } catch {
-    lunarStatus.textContent = 'Enter a valid lunar event date as DD-MM-YYYY.';
+    lunarStatus.textContent = t('Enter a valid lunar event date as DD-MM-YYYY.');
     return;
   }
 
@@ -1145,10 +1216,10 @@ generateBirthdayButton.addEventListener('click', () => {
     }
 
     generatedEvents.push({
-      title: `${name}'s Lunar Event`,
+      title: eventTitle,
       date,
       allDay: true,
-      calendarOwner: name,
+      calendarOwner: eventTitle,
       calendarType: 'lunar-birthday',
       timezone: resolveTimezone(birthdayTimezone.value),
       location: '',
@@ -1164,16 +1235,16 @@ generateBirthdayButton.addEventListener('click', () => {
   const lunarLabel = `${lunarBirthDate.isLeapMonth ? 'leap ' : ''}month ${lunarBirthDate.month}, day ${lunarBirthDate.day}`;
   const skippedLabel = skippedYears ? ` Skipped ${skippedYears} year(s) where that lunar date does not occur.` : '';
   lunarStatus.textContent = `Added 60 future all-day reminders for lunar ${lunarLabel}.${skippedLabel}`;
-  setStatus('Added 60 lunar event reminders with one-day alerts. Review them before export.');
+  setStatus(t('Added 60 lunar event reminders with one-day alerts. Review them before export.'));
 });
 
 ocrButton.addEventListener('click', async () => {
   if (!pastedImageBlob) {
-    setStatus('Paste a screenshot first.');
+    setStatus(t('Paste a screenshot first.'));
     return;
   }
 
-  setStatus('Running OCR...');
+  setStatus(t('Running OCR...'));
   const imageBlob = pastedImageBlob;
   ocrButton.disabled = true;
 
@@ -1181,11 +1252,11 @@ ocrButton.addEventListener('click', async () => {
     const { data } = await Tesseract.recognize(imageBlob, 'eng');
     if (pastedImageBlob !== imageBlob) return;
     rawText.value = data.text;
-    setStatus('OCR done. Review text and click "Extract Events".');
+    setStatus(t('OCR done. Review text and click "Extract Events".'));
   } catch (error) {
     if (pastedImageBlob !== imageBlob) return;
     console.error(error);
-    setStatus('OCR failed. Try a clearer screenshot or paste text manually.');
+    setStatus(t('OCR failed. Try a clearer screenshot or paste text manually.'));
   } finally {
     if (pastedImageBlob === imageBlob) ocrButton.disabled = false;
   }
@@ -1193,16 +1264,16 @@ ocrButton.addEventListener('click', async () => {
 
 pickFolderButton.addEventListener('click', async () => {
   if (!('showDirectoryPicker' in window)) {
-    setStatus('Folder selection is unavailable here. Export will use your browser Downloads folder.');
+    setStatus(t('Folder selection is unavailable here. Export will use your browser Downloads folder.'));
     return;
   }
 
   try {
     folderHandle = await window.showDirectoryPicker();
-    folderStatus.textContent = `Selected: ${folderHandle.name}`;
-    setStatus('Output folder selected. Choose file mode and export.');
+    folderStatus.textContent = t('Selected: {name}', { name: folderHandle.name });
+    setStatus(t('Output folder selected. Choose file mode and export.'));
   } catch {
-    setStatus('Folder selection canceled. Export will use your browser Downloads folder.');
+    setStatus(t('Folder selection canceled. Export will use your browser Downloads folder.'));
   }
 });
 
@@ -1213,7 +1284,7 @@ exportButton.addEventListener('click', async () => {
     return !event.timezone || (!isIanaTimezone(timezone) && fixedTimezoneOffsetMinutes(timezone) === null);
   });
   if (invalidTimezoneEvent) {
-    setStatus('Every timed event requires a valid city/IANA timezone or UTC offset.');
+    setStatus(t('Every timed event requires a valid city/IANA timezone or UTC offset.'));
     return;
   }
 
@@ -1221,7 +1292,7 @@ exportButton.addEventListener('click', async () => {
     event.title && event.date && (event.allDay || (event.startTime && event.endTime && event.timezone))
   ));
   if (validEvents.length === 0) {
-    setStatus('Need at least one complete event with a title and date.');
+    setStatus(t('Need at least one complete event with a title and date.'));
     return;
   }
 
@@ -1234,7 +1305,9 @@ exportButton.addEventListener('click', async () => {
         ? lunarCalendarFilename(validEvents[0])
         : 'calendar-events.ics';
       await exportIcsFile(filename, ics);
-      setStatus(`${folderHandle ? 'Saved' : 'Downloaded'} 1 file with ${validEvents.length} event(s).`);
+      setStatus(t('{action} 1 file with {count} event(s).', {
+        action: t(folderHandle ? 'Saved' : 'Downloaded'), count: validEvents.length
+      }));
       return;
     }
 
@@ -1245,10 +1318,12 @@ exportButton.addEventListener('click', async () => {
       created += 1;
     }
 
-    setStatus(`${folderHandle ? 'Saved' : 'Downloaded'} ${created} file(s), one per event.`);
+    setStatus(t('{action} {count} file(s), one per event.', {
+      action: t(folderHandle ? 'Saved' : 'Downloaded'), count: created
+    }));
   } catch (error) {
     console.error(error);
-    setStatus('Failed to write file(s). Check folder permissions and try again.');
+    setStatus(t('Failed to write file(s). Check folder permissions and try again.'));
   }
 });
 
@@ -1256,4 +1331,8 @@ pasteZone.addEventListener('click', () => {
   pasteZone.focus();
 });
 
+document.addEventListener('languagechange', () => {
+  applyTheme(activeTheme.color.id, activeTheme.shade);
+  renderEvents();
+});
 renderEvents();

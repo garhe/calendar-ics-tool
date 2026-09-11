@@ -1,9 +1,13 @@
-const CACHE_NAME = 'calendar-ics-tool-v21';
+const CACHE_NAME = 'calendar-ics-tool-v35';
 const LOCAL_ASSETS = [
   './',
   './index.html',
   './styles.css',
+  './textures/watercolor.svg',
+  './textures/pencil.svg',
+  './i18n.js',
   './app.js',
+  './artwork.js',
   './recurrence.js',
   './manifest.webmanifest',
   './icons/app-icon.svg',
