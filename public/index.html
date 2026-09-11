@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#0f766e" />
-  <meta name="description" content="Create downloadable calendar events and recurring lunar birthday reminders." />
+  <meta name="description" content="Create downloadable calendar events and recurring lunar event reminders." />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="ICS Calendar" />
@@ -42,7 +42,7 @@
         <option value="" disabled hidden selected>Choose an event type</option>
         <optgroup label="Create">
           <option value="source">From text or screenshot</option>
-          <option value="lunar">Lunar birthday</option>
+          <option value="lunar">Lunar event</option>
           <option value="recurring">Recurring event</option>
         </optgroup>
       </select>
@@ -61,6 +61,7 @@
       <canvas id="imagePreview" class="image-preview" hidden></canvas>
       <div class="actions">
         <button id="ocrButton" class="secondary-button" disabled>Read screenshot</button>
+        <button id="removeScreenshotButton" class="secondary-button" type="button" hidden>Remove screenshot</button>
       </div>
       <label for="rawText">Event text</label>
       <textarea id="rawText" rows="6" placeholder="Design Review | 2026-05-20 14:00-15:00 | Teams | Q3 roadmap | Europe/Paris&#10;AF 1290 Paris → Catania, 28 Aug 2026, 09:20 to 12:05"></textarea>
@@ -71,12 +72,12 @@
     </section>
 
     <section class="panel lunar-panel" data-view="lunar" hidden>
-      <h2>Lunar birthday</h2>
+      <h2>Lunar event</h2>
       <div class="creation-editor">
       <div class="lunar-grid">
         <label>Person<input id="birthdayName" type="text" placeholder="Name" /></label>
         <label>Gregorian birthdate (optional)<input id="birthDate" type="text" inputmode="numeric" maxlength="10" placeholder="DD-MM-YYYY" /></label>
-        <label>Lunar birthday<input id="lunarBirthday" type="text" inputmode="numeric" maxlength="10" placeholder="DD-MM-YYYY" /></label>
+        <label>Lunar event<input id="lunarBirthday" type="text" inputmode="numeric" maxlength="10" placeholder="DD-MM-YYYY" /></label>
         <label class="timezone-field">Timezone
           <input id="birthdayTimezone" data-timezone-input type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="timezoneOptions" autocomplete="off" placeholder="UTC+7 or city name" />
           <div id="timezoneOptions" class="timezone-options" role="listbox" hidden></div>

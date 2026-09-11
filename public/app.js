@@ -1,6 +1,7 @@
 const pasteZone = document.getElementById('pasteZone');
 const imagePreview = document.getElementById('imagePreview');
 const ocrButton = document.getElementById('ocrButton');
+const removeScreenshotButton = document.getElementById('removeScreenshotButton');
 const rawText = document.getElementById('rawText');
 const parseButton = document.getElementById('parseButton');
 const toggleEventsButton = document.getElementById('toggleEventsButton');
@@ -996,10 +997,16 @@ document.addEventListener('paste', (event) => {
   const items = event.clipboardData?.items || [];
   for (const item of items) {
     if (item.type.startsWith('image/')) {
-      pastedImageBlob = item.getAsFile();
-      const url = URL.createObjectURL(pastedImageBlob);
+      const imageBlob = item.getAsFile();
+      if (!imageBlob) continue;
+      pastedImageBlob = imageBlob;
+      ocrButton.disabled = true;
+      removeScreenshotButton.hidden = false;
+      const url = URL.createObjectURL(imageBlob);
       const img = new Image();
       img.onload = () => {
+        URL.revokeObjectURL(url);
+        if (pastedImageBlob !== imageBlob) return;
         imagePreview.width = img.width;
         imagePreview.height = img.height;
         const ctx = imagePreview.getContext('2d');
@@ -1008,13 +1015,29 @@ document.addEventListener('paste', (event) => {
         ocrButton.disabled = false;
         showWorkspaceView('source');
         setStatus('Screenshot ready.');
+      };
+      img.onerror = () => {
         URL.revokeObjectURL(url);
+        if (pastedImageBlob !== imageBlob) return;
+        removeScreenshotButton.click();
+        setStatus('Unable to read this screenshot. Try another image.');
       };
       img.src = url;
       event.preventDefault();
       return;
     }
   }
+});
+
+removeScreenshotButton.addEventListener('click', () => {
+  pastedImageBlob = null;
+  imagePreview.hidden = true;
+  imagePreview.width = 0;
+  imagePreview.height = 0;
+  ocrButton.disabled = true;
+  removeScreenshotButton.hidden = true;
+  setStatus('Screenshot removed.');
+  pasteZone.focus();
 });
 
 parseButton.addEventListener('click', () => {
@@ -1074,7 +1097,7 @@ generateBirthdayButton.addEventListener('click', () => {
   const enteredLunarBirthDate = parseCalendarDate(lunarBirthday.value);
 
   if (!name || !enteredLunarBirthDate) {
-    lunarStatus.textContent = 'Enter a name and lunar birthday as DD-MM-YYYY.';
+    lunarStatus.textContent = 'Enter a name and lunar event date as DD-MM-YYYY.';
     return;
   }
 
@@ -1091,7 +1114,7 @@ generateBirthdayButton.addEventListener('click', () => {
       enteredLunarBirthDate.day
     );
   } catch {
-    lunarStatus.textContent = 'Enter a valid lunar birthday as DD-MM-YYYY.';
+    lunarStatus.textContent = 'Enter a valid lunar event date as DD-MM-YYYY.';
     return;
   }
 
@@ -1122,14 +1145,14 @@ generateBirthdayButton.addEventListener('click', () => {
     }
 
     generatedEvents.push({
-      title: `${name}'s Lunar Birthday`,
+      title: `${name}'s Lunar Event`,
       date,
       allDay: true,
       calendarOwner: name,
       calendarType: 'lunar-birthday',
       timezone: resolveTimezone(birthdayTimezone.value),
       location: '',
-      description: `Annual lunar birthday: month ${lunarBirthDate.month}, day ${lunarBirthDate.day}${lunarBirthDate.isLeapMonth ? ' (born in leap month)' : ''}.`,
+      description: `Annual lunar event: month ${lunarBirthDate.month}, day ${lunarBirthDate.day}${lunarBirthDate.isLeapMonth ? ' (leap month)' : ''}.`,
       alarmMinutes: 1440
     });
   }
@@ -1141,7 +1164,7 @@ generateBirthdayButton.addEventListener('click', () => {
   const lunarLabel = `${lunarBirthDate.isLeapMonth ? 'leap ' : ''}month ${lunarBirthDate.month}, day ${lunarBirthDate.day}`;
   const skippedLabel = skippedYears ? ` Skipped ${skippedYears} year(s) where that lunar date does not occur.` : '';
   lunarStatus.textContent = `Added 60 future all-day reminders for lunar ${lunarLabel}.${skippedLabel}`;
-  setStatus('Added 60 lunar birthday reminders with one-day alerts. Review them before export.');
+  setStatus('Added 60 lunar event reminders with one-day alerts. Review them before export.');
 });
 
 ocrButton.addEventListener('click', async () => {
@@ -1151,14 +1174,20 @@ ocrButton.addEventListener('click', async () => {
   }
 
   setStatus('Running OCR...');
+  const imageBlob = pastedImageBlob;
+  ocrButton.disabled = true;
 
   try {
-    const { data } = await Tesseract.recognize(pastedImageBlob, 'eng');
+    const { data } = await Tesseract.recognize(imageBlob, 'eng');
+    if (pastedImageBlob !== imageBlob) return;
     rawText.value = data.text;
     setStatus('OCR done. Review text and click "Extract Events".');
   } catch (error) {
+    if (pastedImageBlob !== imageBlob) return;
     console.error(error);
     setStatus('OCR failed. Try a clearer screenshot or paste text manually.');
+  } finally {
+    if (pastedImageBlob === imageBlob) ocrButton.disabled = false;
   }
 });
 

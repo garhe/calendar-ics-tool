@@ -1,7 +1,7 @@
 {
   "name": "Calendar ICS Tool",
   "short_name": "ICS Calendar",
-  "description": "Create downloadable calendar events and recurring lunar birthday reminders.",
+  "description": "Create downloadable calendar events and recurring lunar event reminders.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
