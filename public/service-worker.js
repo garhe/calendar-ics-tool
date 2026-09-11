@@ -1,16 +1,19 @@
-const CACHE_NAME = 'calendar-ics-tool-v11';
+const CACHE_NAME = 'calendar-ics-tool-v21';
 const LOCAL_ASSETS = [
   './',
   './index.html',
   './styles.css',
   './app.js',
+  './recurrence.js',
   './manifest.webmanifest',
   './icons/app-icon.svg',
+  './icons/app-icon.svg?v=2',
   './icons/app-icon-180.png',
   './icons/app-icon-192.png',
   './icons/app-icon-512.png',
   './vendor/tesseract.min.js',
-  './vendor/lunar.js'
+  './vendor/lunar.js',
+  './vendor/rrule.min.js'
 ];
 
 self.addEventListener('install', (event) => {

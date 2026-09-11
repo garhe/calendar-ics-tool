@@ -10,85 +10,205 @@
   <meta name="apple-mobile-web-app-title" content="ICS Calendar" />
   <title>Calendar ICS Tool</title>
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="icon" href="icons/app-icon.svg" type="image/svg+xml" />
+  <link rel="icon" href="icons/app-icon.svg?v=2" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="icons/app-icon-180.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <main class="app-shell">
     <header>
-      <h1>Calendar ICS Tool</h1>
-      <p>Paste screenshot or text, extract events, then export .ics files.</p>
+      <img class="app-mark" src="icons/app-icon.svg?v=2" width="52" height="52" alt="" />
+      <div class="brand-title">
+        <p class="eyebrow">Your calendar, composed</p>
+        <h1>Calendar ICS Tool</h1>
+      </div>
+      <details id="themePicker" class="theme-picker">
+        <summary><span class="theme-preview" aria-hidden="true"></span>Theme</summary>
+        <div class="theme-options">
+          <fieldset id="themeSwatches">
+            <legend>Color &amp; shade</legend>
+          </fieldset>
+          <output id="themeCurrent" class="theme-current" aria-live="polite"></output>
+        </div>
+      </details>
     </header>
 
-    <section class="panel">
-      <h2>Input</h2>
-      <p>Paste screenshot with <strong>Ctrl+V</strong> while this page is focused, or paste text below.</p>
+    <nav class="workspace-menu" aria-label="Event workspace">
+      <label for="workspaceView">Event workspace</label>
+      <select id="workspaceView">
+        <option value="" disabled hidden selected>Choose an event type</option>
+        <optgroup label="Create">
+          <option value="source">From text or screenshot</option>
+          <option value="lunar">Lunar birthday</option>
+          <option value="recurring">Recurring event</option>
+        </optgroup>
+      </select>
+    </nav>
+    <nav id="creationSteps" class="creation-steps" aria-label="Creation steps" hidden>
+      <button id="creationDetailsButton" type="button" class="secondary-button" aria-current="step">1. Details</button>
+      <button id="creationReviewButton" type="button" class="secondary-button" disabled>2. Review &amp; export</button>
+    </nav>
+
+    <section class="panel" data-view="source" hidden>
+      <h2>From text or screenshot</h2>
+      <div class="creation-editor">
       <div id="pasteZone" class="paste-zone" tabindex="0" aria-label="Paste zone">
-        Click here and press Ctrl+V to paste screenshot
+        Screenshot clipboard
       </div>
       <canvas id="imagePreview" class="image-preview" hidden></canvas>
       <div class="actions">
-        <button id="ocrButton" disabled>Run OCR on Pasted Screenshot</button>
+        <button id="ocrButton" class="secondary-button" disabled>Read screenshot</button>
       </div>
       <label for="rawText">Event text</label>
-      <textarea id="rawText" rows="10" placeholder="Examples:&#10;Design Review | 2026-05-20 14:00-15:00 | Teams | discuss Q3 roadmap | Europe/Paris&#10;AF 1290 Paris → Catania, 28 Aug 2026, 09:20 to 12:05&#10;September 9th 2026 2pm-3:30pm Project review London"></textarea>
+      <textarea id="rawText" rows="6" placeholder="Design Review | 2026-05-20 14:00-15:00 | Teams | Q3 roadmap | Europe/Paris&#10;AF 1290 Paris → Catania, 28 Aug 2026, 09:20 to 12:05"></textarea>
       <div class="actions">
-        <button id="parseButton">Extract Events</button>
+        <button id="parseButton">Extract &amp; review</button>
+      </div>
       </div>
     </section>
 
-    <section class="panel lunar-panel">
-      <h2>Lunar Birthday</h2>
-      <p class="hint">Enter a lunar birthday directly, or use a Gregorian birthday to fill it automatically.</p>
+    <section class="panel lunar-panel" data-view="lunar" hidden>
+      <h2>Lunar birthday</h2>
+      <div class="creation-editor">
       <div class="lunar-grid">
         <label>Person<input id="birthdayName" type="text" placeholder="Name" /></label>
         <label>Gregorian birthdate (optional)<input id="birthDate" type="text" inputmode="numeric" maxlength="10" placeholder="DD-MM-YYYY" /></label>
         <label>Lunar birthday<input id="lunarBirthday" type="text" inputmode="numeric" maxlength="10" placeholder="DD-MM-YYYY" /></label>
         <label class="timezone-field">Timezone
-          <input id="birthdayTimezone" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="timezoneOptions" autocomplete="off" placeholder="UTC+7 or city name" />
+          <input id="birthdayTimezone" data-timezone-input type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="timezoneOptions" autocomplete="off" placeholder="UTC+7 or city name" />
           <div id="timezoneOptions" class="timezone-options" role="listbox" hidden></div>
         </label>
       </div>
       <div class="actions">
-        <button id="generateBirthdayButton" type="button">Generate 60 Reminders</button>
-        <span id="lunarStatus" class="hint"></span>
+        <button id="generateBirthdayButton" class="secondary-button" type="button">Generate &amp; review 60 reminders</button>
+        <span id="lunarStatus" class="hint" role="status"></span>
+      </div>
       </div>
     </section>
 
-    <section class="panel">
+    <section class="panel" data-view="recurring" aria-labelledby="recurrenceHeading" hidden>
+      <h2 id="recurrenceHeading">Recurring event</h2>
+      <div class="creation-editor">
+      <form id="recurrenceTextForm" class="recurrence-text-form">
+        <label for="recurrenceText">Describe the recurring event</label>
+        <input id="recurrenceText" type="text" maxlength="500" placeholder="Tom's birthday every year on Jun 5" required />
+        <div class="actions">
+          <button type="submit" class="secondary-button">Fill schedule</button>
+          <span id="recurrenceTextStatus" class="hint" role="status"></span>
+        </div>
+      </form>
+      <form id="recurrenceForm">
+        <div class="event-grid">
+          <label>Title<input name="title" type="text" required maxlength="200" /></label>
+          <label>Location<input name="location" type="text" /></label>
+          <label>First date<input name="date" type="date" required /></label>
+          <label class="recurrence-toggle"><input name="allDay" type="checkbox" checked /> All-day event</label>
+        </div>
+        <div id="recurrenceTimes" class="event-grid" hidden>
+          <label>Start time<input name="startTime" type="time" value="09:00" /></label>
+          <label>End time<input name="endTime" type="time" value="10:00" /></label>
+          <label class="timezone-field">Timezone
+            <input id="recurrenceTimezone" name="timezone" data-timezone-input type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="recurrenceTimezoneOptions" autocomplete="off" placeholder="City or IANA timezone" />
+            <div id="recurrenceTimezoneOptions" class="timezone-options" role="listbox" hidden></div>
+          </label>
+          <label class="recurrence-toggle"><input name="nextDay" type="checkbox" /> Ends the next day</label>
+        </div>
+        <div class="event-grid">
+          <label>Repeat<select name="frequency">
+            <option value="DAILY">Daily</option><option value="WEEKLY" selected>Weekly</option>
+            <option value="MONTHLY">Monthly</option><option value="QUARTERLY">Quarterly</option>
+            <option value="YEARLY">Yearly</option>
+          </select></label>
+          <label>Every<input name="interval" type="number" min="1" max="99" step="1" value="1" required /><span id="recurrenceUnit" class="hint">week(s)</span></label>
+        </div>
+        <details class="schedule-options">
+          <summary>Schedule details</summary>
+        <label id="recurrenceWeekStart">Week starts on<select name="weekStart"><option value="MO">Monday</option><option value="SU">Sunday</option></select></label>
+        <fieldset id="recurrenceWeekdays" class="recurrence-choices">
+          <legend>Days of the week</legend>
+          <label><input type="checkbox" name="weekday" value="MO" />Mon</label>
+          <label><input type="checkbox" name="weekday" value="TU" />Tue</label>
+          <label><input type="checkbox" name="weekday" value="WE" />Wed</label>
+          <label><input type="checkbox" name="weekday" value="TH" />Thu</label>
+          <label><input type="checkbox" name="weekday" value="FR" />Fri</label>
+          <label><input type="checkbox" name="weekday" value="SA" />Sat</label>
+          <label><input type="checkbox" name="weekday" value="SU" />Sun</label>
+        </fieldset>
+        <fieldset id="recurrenceMonths" class="recurrence-choices" hidden><legend>Months</legend></fieldset>
+        <div id="recurrencePattern" hidden>
+          <label>On<select name="pattern"><option value="dates">Dates of the month</option><option value="weekday">Weekday position</option></select></label>
+          <fieldset id="recurrenceMonthDays" class="recurrence-choices"><legend>Dates</legend></fieldset>
+          <div id="recurrenceOrdinal" class="event-grid" hidden>
+            <label>Position<select name="position"><option value="1">First</option><option value="2">Second</option><option value="3">Third</option><option value="4">Fourth</option><option value="5">Fifth</option><option value="-1">Last</option></select></label>
+            <label>Day<select name="positionDay"><option value="MO">Monday</option><option value="TU">Tuesday</option><option value="WE">Wednesday</option><option value="TH">Thursday</option><option value="FR">Friday</option><option value="SA">Saturday</option><option value="SU">Sunday</option></select></label>
+          </div>
+        </div>
+        </details>
+        <div class="event-grid">
+          <label>Ends<select name="ending"><option value="never">Never</option><option value="until">On date</option><option value="count">After occurrences</option></select></label>
+          <label id="recurrenceUntil" hidden>Last date (inclusive)<input name="until" type="date" /></label>
+          <label id="recurrenceCount" hidden>Occurrences<input name="count" type="number" min="1" max="9999" step="1" value="10" /></label>
+          <label>Reminder<select name="alarm"><option value="">None</option><option value="0">At start</option><option value="5">5 minutes before</option><option value="15">15 minutes before</option><option value="30">30 minutes before</option><option value="60">1 hour before</option><option value="1440">1 day before</option><option value="10080">1 week before</option></select></label>
+        </div>
+        <details class="schedule-options">
+          <summary>Description &amp; skipped dates</summary>
+        <label>Description<textarea name="description" rows="2"></textarea></label>
+        <div class="recurrence-exceptions">
+          <label>Skip date<input id="recurrenceSkipDate" type="date" /></label>
+          <button id="recurrenceAddSkip" class="secondary-button" type="button">Skip date</button>
+        </div>
+        <div id="recurrenceSkipped" class="actions"></div>
+        </details>
+        <div class="recurrence-preview">
+          <output id="recurrenceSummary"></output>
+          <ol id="recurrencePreview"></ol>
+        </div>
+        <div class="actions">
+          <button id="recurrenceSave" type="submit">Review recurring event</button>
+          <button id="recurrenceCancel" type="button" class="secondary-button" hidden>Cancel edit</button>
+          <span id="recurrenceStatus" class="hint" role="status"></span>
+        </div>
+      </form>
+      </div>
+    </section>
+
+    <div id="reviewExportStep" hidden>
       <div class="section-heading">
-        <h2>Parsed Events</h2>
+        <h3 id="reviewExportHeading" tabindex="-1">Review &amp; export</h3>
         <button id="toggleEventsButton" class="secondary-button" type="button" aria-expanded="false" aria-controls="eventsRegion">Show events (0)</button>
       </div>
       <div id="eventsRegion" hidden>
-        <p class="hint">Dates, time ranges, flights, trains, stays, and common OCR arrow characters are detected automatically.</p>
         <div id="eventsContainer"></div>
-        <button id="addEventButton" type="button">Add Blank Event</button>
+        <button id="addEventButton" class="secondary-button" type="button">Add event</button>
       </div>
-    </section>
 
-    <section class="panel">
-      <h2>Export</h2>
+      <div class="export-options">
+      <h3>Export options</h3>
       <fieldset>
         <legend>File mode</legend>
         <label><input type="radio" name="mode" value="single" checked /> One .ics file with all events</label>
         <label><input type="radio" name="mode" value="multi" /> One .ics file per event</label>
       </fieldset>
       <div class="actions">
-        <button id="pickFolderButton">Choose Output Folder (Optional)</button>
-        <span id="folderStatus">Exports download normally when no folder is selected</span>
+        <button id="pickFolderButton" class="secondary-button">Choose folder</button>
+        <span id="folderStatus" role="status">Destination: Downloads</span>
       </div>
       <div class="actions">
         <button id="exportButton">Export .ics</button>
       </div>
-      <p id="status" role="status"></p>
-    </section>
+      </div>
+    </div>
+    <p id="status" role="status"></p>
   </main>
 
   <script src="vendor/tesseract.min.js"></script>
   <script src="vendor/lunar.js"></script>
+  <script src="vendor/rrule.min.js"></script>
   <script src="app.js"></script>
+  <script src="recurrence.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
       let reloadingForUpdate = false;

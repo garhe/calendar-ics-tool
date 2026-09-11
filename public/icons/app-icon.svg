@@ -1,7 +1,55 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="96" fill="#0f766e"/>
-  <rect x="80" y="112" width="352" height="320" rx="48" fill="#ffffff"/>
-  <path d="M80 176h352v80H80z" fill="#ccfbf1"/>
-  <path d="M160 72v96M352 72v96" stroke="#ffffff" stroke-width="32" stroke-linecap="round"/>
-  <path d="M160 304h72v72h-72zM280 304h72v72h-72z" fill="#0f766e"/>
+  <defs>
+    <linearGradient id="paper" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#ffffff"/>
+      <stop offset="0.65" stop-color="#f3f7f6"/>
+      <stop offset="1" stop-color="#d7e6e1"/>
+    </linearGradient>
+    <linearGradient id="cover" x1="0" y1="0" x2="0.8" y2="1">
+      <stop stop-color="#81c9b8"/>
+      <stop offset="0.45" stop-color="#419884"/>
+      <stop offset="1" stop-color="#21695f"/>
+    </linearGradient>
+    <linearGradient id="edge" x1="0" y1="0" x2="1" y2="0">
+      <stop stop-color="#9cbcb0"/>
+      <stop offset="1" stop-color="#527d72"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="0">
+      <stop stop-color="#aac7be"/>
+      <stop offset="0.35" stop-color="#ffffff"/>
+      <stop offset="0.65" stop-color="#e5f1ec"/>
+      <stop offset="1" stop-color="#89afa0"/>
+    </linearGradient>
+    <linearGradient id="day" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#e4ae91"/>
+      <stop offset="1" stop-color="#bd7861"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="180%">
+      <feGaussianBlur stdDeviation="15"/>
+    </filter>
+  </defs>
+  <ellipse cx="265" cy="434" rx="165" ry="24" fill="#284d43" opacity="0.2" filter="url(#shadow)"/>
+  <g transform="translate(256 256) rotate(-9) translate(-256 -256)">
+    <rect x="105" y="123" width="322" height="310" rx="40" fill="url(#edge)"/>
+    <rect x="91" y="115" width="324" height="309" rx="39" fill="#c6d9d1"/>
+    <path d="M117 405h263M119 413h256" fill="none" stroke="#8eaea0" stroke-width="3" stroke-linecap="round"/>
+    <rect x="80" y="92" width="328" height="314" rx="38" fill="url(#paper)" stroke="#ffffff" stroke-width="3"/>
+    <path d="M118 92h252a38 38 0 0 1 38 38v72H80v-72a38 38 0 0 1 38-38Z" fill="url(#cover)"/>
+    <path d="M92 132a28 28 0 0 1 28-28h245" fill="none" stroke="#c9ebe0" stroke-width="4" stroke-linecap="round" opacity="0.65"/>
+    <path d="M82 202h324" stroke="#164e44" stroke-opacity="0.2" stroke-width="5"/>
+    <ellipse cx="160" cy="132" rx="22" ry="12" fill="#1b5b50" opacity="0.55"/>
+    <ellipse cx="330" cy="132" rx="22" ry="12" fill="#1b5b50" opacity="0.55"/>
+    <rect x="146" y="59" width="28" height="83" rx="14" fill="url(#ring)" stroke="#6b9d8f" stroke-width="2"/>
+    <rect x="316" y="59" width="28" height="83" rx="14" fill="url(#ring)" stroke="#6b9d8f" stroke-width="2"/>
+    <g fill="#aac5bb">
+      <rect x="124" y="238" width="42" height="32" rx="8"/>
+      <rect x="222" y="238" width="42" height="32" rx="8"/>
+      <rect x="320" y="238" width="42" height="32" rx="8"/>
+      <rect x="124" y="311" width="42" height="32" rx="8"/>
+      <rect x="222" y="311" width="42" height="32" rx="8"/>
+    </g>
+    <rect x="307" y="299" width="65" height="63" rx="15" fill="#9a6c59" opacity="0.22"/>
+    <rect x="303" y="293" width="65" height="63" rx="15" fill="url(#day)"/>
+    <path d="m321 324 10 10 19-22" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
 </svg>

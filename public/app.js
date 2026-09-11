@@ -19,12 +19,224 @@ const timezoneOptions = document.getElementById('timezoneOptions');
 const generateBirthdayButton = document.getElementById('generateBirthdayButton');
 const lunarStatus = document.getElementById('lunarStatus');
 
+const themePicker = document.getElementById('themePicker');
+const themeSwatches = document.getElementById('themeSwatches');
+const themeCurrent = document.getElementById('themeCurrent');
+const themeStorageKey = 'calendar-ics-theme';
+const themeColors = [
+  { id: 'sage', name: 'Sage', hue: 145, saturation: 22 },
+  { id: 'lagoon', name: 'Lagoon', hue: 172, saturation: 40 },
+  { id: 'sky', name: 'Sky', hue: 205, saturation: 35 },
+  { id: 'iris', name: 'Iris', hue: 265, saturation: 24 },
+  { id: 'rose', name: 'Rose', hue: 345, saturation: 28 }
+];
+const themeShades = ['Mist', 'Soft', 'Deep'];
+
+const calendarLogo = document.querySelector('.app-mark');
+let calendarArtwork = null;
+let activeTheme = { color: themeColors[1], shade: 1 };
+
+function updateCalendarLogo() {
+  if (!calendarArtwork) return;
+  const { color, shade } = activeTheme;
+  const artwork = calendarArtwork.cloneNode(true);
+  const materialColors = {
+    '#81c9b8': 82 - shade * 16,
+    '#419884': 54 - shade * 8,
+    '#21695f': 32 - shade * 4,
+    '#9cbcb0': 72, '#527d72': 42, '#c6d9d1': 84,
+    '#8eaea0': 62, '#c9ebe0': 91, '#164e44': 24,
+    '#1b5b50': 28, '#6b9d8f': 54, '#aac5bb': 76,
+    '#aac7be': 76, '#e5f1ec': 94, '#89afa0': 66,
+    '#f3f7f6': 97, '#d7e6e1': 90, '#284d43': 24
+  };
+  for (const element of artwork.querySelectorAll('[fill], [stroke], [stop-color]')) {
+    for (const attribute of ['fill', 'stroke', 'stop-color']) {
+      const lightness = materialColors[element.getAttribute(attribute)];
+      if (lightness === undefined) continue;
+      element.setAttribute(attribute, `hsl(${color.hue} ${color.saturation}% ${lightness}%)`);
+    }
+  }
+  const source = new XMLSerializer().serializeToString(artwork);
+  calendarLogo.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(source)}`;
+}
+
+fetch(calendarLogo.getAttribute('src'))
+  .then((response) => {
+    if (!response.ok) throw new Error('Calendar artwork unavailable');
+    return response.text();
+  })
+  .then((source) => {
+    const documentSvg = new DOMParser().parseFromString(source, 'image/svg+xml');
+    if (documentSvg.querySelector('parsererror') || documentSvg.documentElement.localName !== 'svg') return;
+    calendarArtwork = documentSvg.documentElement;
+    updateCalendarLogo();
+  })
+  .catch(() => {});
+
+function applyTheme(colorId, shadeIndex, persist = false) {
+  const color = themeColors.find((candidate) => candidate.id === colorId) || themeColors[1];
+  const shade = Number.isInteger(shadeIndex) && shadeIndex >= 0 && shadeIndex < themeShades.length
+    ? shadeIndex : 1;
+  const tone = (lightness, saturation = color.saturation) => `hsl(${color.hue} ${saturation}% ${lightness}%)`;
+  const tokens = {
+    '--theme-swatch': tone(82 - shade * 16),
+    '--accent': tone(32 - shade * 4),
+    '--accent-hover': tone(26 - shade * 4),
+    '--accent-soft': tone(95 - shade * 3),
+    '--accent-border': tone(66 - shade * 5),
+    '--accent-ring': `hsl(${color.hue} ${color.saturation}% 40% / 0.14)`,
+    '--selection': tone(84 - shade * 4),
+    '--wash': tone(97 - shade * 3),
+    '--background-tint': tone(91 - shade * 4, 42),
+    '--background-counter': `hsl(${(color.hue + 85) % 360} 38% ${94 - shade * 3}%)`,
+    '--glass-tint': `hsl(${color.hue} 42% ${84 - shade * 6}% / 0.38)`,
+    '--glass-counter-tint': `hsl(${(color.hue + 85) % 360} 38% 86% / 0.28)`,
+    '--bg': tone(98 - shade, 12)
+  };
+  for (const [property, value] of Object.entries(tokens)) {
+    document.documentElement.style.setProperty(property, value);
+  }
+  activeTheme = { color, shade };
+  updateCalendarLogo();
+  themeSwatches.querySelectorAll('input').forEach((input) => {
+    input.checked = input.value === `${color.id}-${shade}`;
+  });
+  themeCurrent.textContent = `${color.name} / ${themeShades[shade]}`;
+  document.querySelector('meta[name="theme-color"]').content = tone(32 - shade * 4);
+  if (persist) {
+    try {
+      localStorage.setItem(themeStorageKey, JSON.stringify({ color: color.id, shade }));
+    } catch {
+      themeCurrent.textContent += ' (this visit only)';
+    }
+  }
+}
+
+for (const color of themeColors) {
+  const column = document.createElement('div');
+  column.className = 'theme-column';
+  const name = document.createElement('span');
+  name.className = 'theme-color-name';
+  name.textContent = color.name;
+  column.append(name);
+  themeShades.forEach((shade, index) => {
+    const label = document.createElement('label');
+    label.className = 'theme-swatch';
+    label.title = `${color.name} / ${shade}`;
+    const input = document.createElement('input');
+    input.type = 'radio';
+    input.name = 'theme';
+    input.value = `${color.id}-${index}`;
+    input.setAttribute('aria-label', `${color.name} / ${shade}`);
+    input.addEventListener('change', () => applyTheme(color.id, index, true));
+    const preview = document.createElement('span');
+    preview.setAttribute('aria-hidden', 'true');
+    preview.style.setProperty('--swatch', `hsl(${color.hue} ${color.saturation}% ${82 - index * 16}%)`);
+    label.append(input, preview);
+    column.append(label);
+  });
+  themeSwatches.append(column);
+}
+
+let savedTheme = null;
+try {
+  savedTheme = JSON.parse(localStorage.getItem(themeStorageKey));
+} catch {
+  savedTheme = null;
+}
+applyTheme(savedTheme?.color, savedTheme?.shade);
+
+document.addEventListener('pointerdown', (event) => {
+  if (!themePicker.contains(event.target)) themePicker.open = false;
+});
+themePicker.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    themePicker.open = false;
+    themePicker.querySelector('summary').focus();
+  }
+});
+
 let pastedImageBlob = null;
 let folderHandle = null;
+
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+function showButtonRipple(event) {
+  if (reducedMotion.matches) return;
+  if (event.type === 'pointerdown' && (event.button !== 0 || !event.isPrimary)) return;
+  if (event.type === 'click' && event.detail !== 0) return;
+
+  const button = event.target.closest('button, .paste-zone, .theme-picker summary');
+  if (!button || button.disabled) return;
+
+  const bounds = button.getBoundingClientRect();
+  const diameter = Math.hypot(bounds.width, bounds.height) * 2;
+  const pointerClick = event.type === 'pointerdown';
+  const positionX = pointerClick ? event.clientX - bounds.left : bounds.width / 2;
+  const positionY = pointerClick ? event.clientY - bounds.top : bounds.height / 2;
+  const ripple = document.createElement('span');
+  ripple.className = 'material-ripple';
+  ripple.setAttribute('aria-hidden', 'true');
+  ripple.style.width = `${diameter}px`;
+  ripple.style.height = `${diameter}px`;
+  ripple.style.left = `${positionX - diameter / 2}px`;
+  ripple.style.top = `${positionY - diameter / 2}px`;
+  button.append(ripple);
+  window.setTimeout(() => ripple.remove(), 800);
+}
+
+document.addEventListener('pointerdown', showButtonRipple);
+document.addEventListener('click', showButtonRipple);
 
 const state = {
   events: []
 };
+
+const creationEvents = { source: [], lunar: [], recurring: [] };
+let activeCreation = '';
+
+function showCreationStep(review) {
+  if (!activeCreation) return;
+  const section = document.querySelector(`[data-view="${activeCreation}"]`);
+  const finalStep = document.getElementById('reviewExportStep');
+  section.append(finalStep);
+  section.querySelector('.creation-editor').hidden = review;
+  finalStep.hidden = !review;
+  document.getElementById('creationDetailsButton').toggleAttribute('aria-current', !review);
+  document.getElementById('creationReviewButton').toggleAttribute('aria-current', review);
+  document.querySelectorAll('.creation-steps [aria-current]').forEach((button) => button.setAttribute('aria-current', 'step'));
+  if (review) {
+    toggleEventsButton.setAttribute('aria-expanded', 'true');
+    renderEvents();
+    document.getElementById('reviewExportHeading').focus();
+  }
+}
+
+function showWorkspaceView(view) {
+  if (view === 'review') {
+    showCreationStep(true);
+    return;
+  }
+  const picker = document.getElementById('workspaceView');
+  if (![...picker.options].some((option) => option.value === view)) return;
+  hideTimezoneOptions();
+  if (view !== activeCreation) setStatus('');
+  if (activeCreation) creationEvents[activeCreation] = state.events;
+  activeCreation = view;
+  state.events = creationEvents[view] || [];
+  picker.value = view;
+  document.querySelectorAll('[data-view]').forEach((section) => {
+    section.hidden = section.dataset.view !== view;
+  });
+  document.getElementById('creationSteps').hidden = !view;
+  showCreationStep(false);
+  renderEvents();
+}
+
+document.getElementById('workspaceView').addEventListener('change', (event) => showWorkspaceView(event.target.value));
+document.getElementById('creationDetailsButton').addEventListener('click', () => showCreationStep(false));
+document.getElementById('creationReviewButton').addEventListener('click', () => showCreationStep(true));
 
 const defaultTimezone = 'Asia/Ho_Chi_Minh';
 const defaultTimezoneLabel = 'UTC+7 Ho Chi Minh City';
@@ -33,18 +245,29 @@ const supportedTimezones = typeof Intl.supportedValuesOf === 'function'
   : [defaultTimezone];
 const timezoneAliases = [
   { label: 'HCMC / Ho Chi Minh City', timezone: defaultTimezone, terms: 'hcmc saigon vietnam' },
-  { label: 'Hanoi', timezone: defaultTimezone, terms: 'ha noi vietnam' }
+  { label: 'Hanoi', timezone: defaultTimezone, terms: 'ha noi vietnam' },
+  { label: 'Edinburgh', timezone: 'Europe/London', terms: 'scotland' },
+  { label: 'Rennes', timezone: 'Europe/Paris', terms: 'france' },
+  { label: 'Lille', timezone: 'Europe/Paris', terms: 'france' },
+  { label: 'Kyoto', timezone: 'Asia/Tokyo', terms: 'japan' },
+  { label: 'Osaka', timezone: 'Asia/Tokyo', terms: 'japan' },
+  { label: 'Beijing', timezone: 'Asia/Shanghai', terms: 'china' },
+  { label: 'Seattle', timezone: 'America/Los_Angeles', terms: 'washington' },
+  { label: 'Boston', timezone: 'America/New_York', terms: 'massachusetts' },
+  { label: 'Montreal', timezone: 'America/Toronto', terms: 'quebec' }
 ];
 
 birthdayTimezone.value = defaultTimezoneLabel;
+let activeTimezoneInput = null;
+let activeTimezoneIndex = -1;
 
 function normalizeTimezoneSearch(value) {
-  return value.toLowerCase().replace(/[^a-z0-9]/g, '');
+  return value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
 }
 
 function timezoneSearchResults(value) {
   const searchValue = normalizeTimezoneSearch(value);
-  if (!searchValue) return timezoneAliases;
+  if (!searchValue) return timezoneAliases.slice(0, 8);
 
   const aliases = timezoneAliases.filter(({ label, terms }) =>
     normalizeTimezoneSearch(`${label} ${terms}`).includes(searchValue)
@@ -56,7 +279,17 @@ function timezoneSearchResults(value) {
       timezone
     }));
 
+  const matchRank = ({ label, timezone }) => {
+    const names = [normalizeTimezoneSearch(label), normalizeTimezoneSearch(timezone.split('/').at(-1))];
+    if (names.includes(searchValue)) return 0;
+    if (names.some((name) => name.startsWith(searchValue))) return 1;
+    return 2;
+  };
+
   return [...aliases, ...cities]
+    .sort((first, second) => matchRank(first) - matchRank(second)
+      || first.timezone.split('/').at(-1).length - second.timezone.split('/').at(-1).length
+      || first.label.localeCompare(second.label))
     .filter((result, index, results) =>
       results.findIndex(({ timezone }) => timezone === result.timezone) === index
     )
@@ -64,39 +297,93 @@ function timezoneSearchResults(value) {
 }
 
 function hideTimezoneOptions() {
-  timezoneOptions.hidden = true;
-  birthdayTimezone.setAttribute('aria-expanded', 'false');
+  if (activeTimezoneInput) {
+    const list = document.getElementById(activeTimezoneInput.getAttribute('aria-controls'));
+    if (list) list.hidden = true;
+    activeTimezoneInput.setAttribute('aria-expanded', 'false');
+    activeTimezoneInput.removeAttribute('aria-activedescendant');
+  }
+  activeTimezoneInput = null;
+  activeTimezoneIndex = -1;
 }
 
-function showTimezoneOptions() {
-  const results = timezoneSearchResults(birthdayTimezone.value);
-  timezoneOptions.replaceChildren(...results.map(({ label, timezone }) => {
-    const option = document.createElement('button');
-    option.type = 'button';
+function showTimezoneOptions(input) {
+  if (activeTimezoneInput !== input) hideTimezoneOptions();
+  activeTimezoneInput = input;
+  activeTimezoneIndex = -1;
+  input.removeAttribute('aria-activedescendant');
+  const list = document.getElementById(input.getAttribute('aria-controls'));
+  const results = timezoneSearchResults(input.value);
+  list.replaceChildren(...results.map(({ label, timezone }, index) => {
+    const option = document.createElement('div');
     option.className = 'timezone-option';
+    option.id = `${list.id}-option-${index}`;
     option.setAttribute('role', 'option');
+    option.setAttribute('aria-selected', 'false');
     option.dataset.timezone = timezone;
     option.textContent = `${label} (${timezone})`;
     return option;
   }));
-  timezoneOptions.hidden = results.length === 0;
-  birthdayTimezone.setAttribute('aria-expanded', String(results.length > 0));
+  list.hidden = results.length === 0;
+  input.setAttribute('aria-expanded', String(results.length > 0));
 }
 
-birthdayTimezone.addEventListener('input', showTimezoneOptions);
-birthdayTimezone.addEventListener('focus', showTimezoneOptions);
-birthdayTimezone.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape') hideTimezoneOptions();
-});
-timezoneOptions.addEventListener('mousedown', (event) => {
-  const option = event.target.closest('.timezone-option');
-  if (!option) return;
-  event.preventDefault();
-  birthdayTimezone.value = option.dataset.timezone;
+function selectTimezoneOption(option) {
+  const input = activeTimezoneInput;
+  if (!input || !option) return;
+  input.value = option.dataset.timezone;
   hideTimezoneOptions();
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+  hideTimezoneOptions();
+}
+
+document.addEventListener('input', (event) => {
+  if (event.target.matches('[data-timezone-input]')) showTimezoneOptions(event.target);
 });
-document.addEventListener('mousedown', (event) => {
-  if (!event.target.closest('.timezone-field')) hideTimezoneOptions();
+document.addEventListener('focusin', (event) => {
+  if (event.target.matches('[data-timezone-input]')) showTimezoneOptions(event.target);
+  else hideTimezoneOptions();
+});
+document.addEventListener('keydown', (event) => {
+  if (!event.target.matches('[data-timezone-input]')) return;
+  if (event.key === 'Escape' || event.key === 'Tab') {
+    if (event.key === 'Escape') event.preventDefault();
+    hideTimezoneOptions();
+    return;
+  }
+  if (!['ArrowDown', 'ArrowUp', 'Enter'].includes(event.key)) return;
+  if (event.key !== 'Enter' && (!activeTimezoneInput || event.target.getAttribute('aria-expanded') !== 'true')) {
+    showTimezoneOptions(event.target);
+  }
+  if (!activeTimezoneInput) return;
+  const list = document.getElementById(activeTimezoneInput.getAttribute('aria-controls'));
+  const options = [...list.children];
+  if (list.hidden || !options.length) return;
+  if (event.key === 'Enter') {
+    if (activeTimezoneIndex >= 0) {
+      event.preventDefault();
+      selectTimezoneOption(options[activeTimezoneIndex]);
+    }
+    return;
+  }
+  event.preventDefault();
+  activeTimezoneIndex = (activeTimezoneIndex + (event.key === 'ArrowDown' ? 1 : activeTimezoneIndex < 0 ? 0 : -1) + options.length) % options.length;
+  options.forEach((option, index) => option.setAttribute('aria-selected', String(index === activeTimezoneIndex)));
+  activeTimezoneInput.setAttribute('aria-activedescendant', options[activeTimezoneIndex].id);
+  options[activeTimezoneIndex].scrollIntoView({ block: 'nearest' });
+});
+document.addEventListener('pointerdown', (event) => {
+  const option = event.target.closest('.timezone-option');
+  if (option && activeTimezoneInput) {
+    event.preventDefault();
+    selectTimezoneOption(option);
+  } else if (!event.target.closest('.timezone-field')) {
+    hideTimezoneOptions();
+  }
+});
+document.addEventListener('focusout', (event) => {
+  if (event.target === activeTimezoneInput) hideTimezoneOptions();
 });
 
 function resolveTimezone(value) {
@@ -104,6 +391,8 @@ function resolveTimezone(value) {
   if (!enteredValue) return defaultTimezone;
 
   const normalizedValue = normalizeTimezoneSearch(enteredValue);
+  const cityAlias = timezoneAliases.find(({ label }) => normalizeTimezoneSearch(label) === normalizedValue);
+  if (cityAlias) return cityAlias.timezone;
   if (
     normalizedValue === 'hcmc'
     || normalizedValue === 'hanoi'
@@ -296,6 +585,14 @@ function eventToIcsBlock(event, timezone = resolveTimezone(birthdayTimezone.valu
     `LOCATION:${escapeIcsText(event.location || '')}`,
     `DESCRIPTION:${escapeIcsText(event.description || '')}`
   ];
+
+  if (event.recurrence) {
+    if (!event.allDay) {
+      lines[3] = `DTSTART;TZID=${eventTimezone}:${toIcsDate(event.date)}T${event.startTime.replace(':', '')}00`;
+      lines[4] = `DTEND;TZID=${eventTimezone}:${toIcsDate(event.endDate || event.date)}T${event.endTime.replace(':', '')}00`;
+    }
+    lines.push(...recurrenceIcsLines(event));
+  }
 
   if (Number.isFinite(event.alarmMinutes)) {
     const trigger = event.allDay && event.alarmMinutes === 1440
@@ -640,7 +937,11 @@ function normalizeTime(value) {
 
 function renderEvents() {
   eventsContainer.innerHTML = '';
+  document.getElementById('creationReviewButton').disabled = state.events.length === 0;
+  exportButton.disabled = state.events.length === 0;
+  addEventButton.hidden = activeCreation !== 'source';
   const expanded = toggleEventsButton.getAttribute('aria-expanded') === 'true';
+  eventsRegion.hidden = !expanded;
   toggleEventsButton.textContent = `${expanded ? 'Hide' : 'Show'} events (${state.events.length})`;
 
   if (state.events.length === 0) {
@@ -657,6 +958,7 @@ function renderEvents() {
         <button type="button" data-remove="${index}">Remove</button>
       </div>
       <label>Title<input data-key="title" data-index="${index}" type="text" value="${escapeHtml(event.title)}"></label>
+      ${event.recurrence ? `<div class="recurrence-review"><p>${escapeHtml(event.recurrence.summary)}</p><button type="button" class="secondary-button" data-edit-recurrence="${index}">Edit recurrence</button></div><fieldset disabled>` : ''}
       <div class="event-grid">
         <label>Date<input data-key="date" data-index="${index}" type="date" value="${escapeHtml(event.date)}"></label>
         <label>Location<input data-key="location" data-index="${index}" type="text" value="${escapeHtml(event.location)}"></label>
@@ -664,8 +966,9 @@ function renderEvents() {
           ? '<div class="all-day-label">All-day event</div>'
           : `<label>Start<input data-key="startTime" data-index="${index}" type="time" value="${escapeHtml(event.startTime)}"></label>
              <label>End<input data-key="endTime" data-index="${index}" type="time" value="${escapeHtml(event.endTime)}"></label>
-             <label>Timezone (required)<input data-key="timezone" data-index="${index}" type="text" required placeholder="City or UTC offset" value="${escapeHtml(event.timezone)}"></label>`}
+             <label class="timezone-field">Timezone (required)<input id="eventTimezone-${index}" data-timezone-input data-key="timezone" data-index="${index}" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="eventTimezoneOptions-${index}" autocomplete="off" required placeholder="City or UTC offset" value="${escapeHtml(event.timezone)}"><div id="eventTimezoneOptions-${index}" class="timezone-options" role="listbox" hidden></div></label>`}
       </div>
+      ${event.recurrence ? '</fieldset>' : ''}
       <label>Description<input data-key="description" data-index="${index}" type="text" value="${escapeHtml(event.description)}"></label>
     `;
 
@@ -703,7 +1006,8 @@ document.addEventListener('paste', (event) => {
         ctx.drawImage(img, 0, 0);
         imagePreview.hidden = false;
         ocrButton.disabled = false;
-        setStatus('Screenshot pasted. Click "Run OCR on Pasted Screenshot".');
+        showWorkspaceView('source');
+        setStatus('Screenshot ready.');
         URL.revokeObjectURL(url);
       };
       img.src = url;
@@ -724,6 +1028,7 @@ parseButton.addEventListener('click', () => {
   toggleEventsButton.setAttribute('aria-expanded', 'true');
   eventsRegion.hidden = false;
   renderEvents();
+  showWorkspaceView('review');
 
   setStatus(`Extracted ${state.events.length} event(s). Review and edit before export.`);
 });
@@ -831,6 +1136,7 @@ generateBirthdayButton.addEventListener('click', () => {
 
   state.events = generatedEvents;
   renderEvents();
+  showWorkspaceView('review');
 
   const lunarLabel = `${lunarBirthDate.isLeapMonth ? 'leap ' : ''}month ${lunarBirthDate.month}, day ${lunarBirthDate.day}`;
   const skippedLabel = skippedYears ? ` Skipped ${skippedYears} year(s) where that lunar date does not occur.` : '';
