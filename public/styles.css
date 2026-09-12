@@ -461,7 +461,7 @@ textarea {
 
 input::placeholder,
 textarea::placeholder {
-  color: #74807e;
+  color: var(--muted);
   opacity: 1;
 }
 
@@ -1225,6 +1225,12 @@ input[type="checkbox"] {
   border-top: 1px solid var(--accent-border);
   margin-top: 0.75rem;
   padding-top: 0.75rem;
+}
+
+#interfacePicker legend,
+#artworkControls > label {
+  color: var(--ink);
+  font-weight: 500;
 }
 
 #interfacePicker .language-options {

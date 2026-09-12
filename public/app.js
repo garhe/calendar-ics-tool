@@ -108,6 +108,9 @@ function applyTheme(colorId, shadeIndex, persist = false, customHex = customColo
   const accentLightness = color.id === 'custom' ? Math.min(28, color.lightness) : 32 - shade * 4;
   const tintSaturation = color.id === 'custom' ? color.saturation : 42;
   const tokens = {
+    '--ink': tone(18 - shade, Math.min(48, color.saturation)),
+    '--muted': tone(30 - shade, Math.min(32, color.saturation)),
+    '--accent-2': tone(accentLightness),
     '--theme-swatch': color.hex || tone(82 - shade * 16),
     '--accent': tone(accentLightness),
     '--accent-hover': tone(Math.max(0, accentLightness - 6)),
@@ -690,17 +693,19 @@ function getLunarDate(year, month, day) {
   };
 }
 
-function parseCalendarDate(value) {
-  const match = value.trim().match(/^(\d{1,2})\s*[-/]\s*(\d{1,2})\s*[-/]\s*(\d{4})$/);
-  if (!match) {
-    return null;
-  }
+function calendarDateOrder(language = window.calendarI18n.language) {
+  const locale = { en: 'en-US', 'zh-CN': 'zh-CN', vi: 'vi-VN' }[language] || 'en-US';
+  return new Intl.DateTimeFormat(locale, { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'UTC' })
+    .formatToParts(new Date(Date.UTC(2006, 10, 22)))
+    .filter(part => ['year', 'month', 'day'].includes(part.type))
+    .map(part => part.type);
+}
 
-  return {
-    day: Number(match[1]),
-    month: Number(match[2]),
-    year: Number(match[3])
-  };
+function parseCalendarDate(value, language = window.calendarI18n.language) {
+  const parts = value.trim().split(/\s*[-/]\s*/);
+  const order = calendarDateOrder(language);
+  if (parts.length !== 3 || parts.some((part, index) => !(order[index] === 'year' ? /^\d{4}$/ : /^\d{1,2}$/).test(part))) return null;
+  return Object.fromEntries(order.map((part, index) => [part, Number(parts[index])]));
 }
 
 function isValidGregorianDate(date) {
@@ -714,18 +719,20 @@ function isValidGregorianDate(date) {
     && check.getUTCDate() === date.day;
 }
 
-function formatDisplayDate(date) {
-  return [
-    String(date.day).padStart(2, '0'),
-    String(date.month).padStart(2, '0'),
-    date.year
-  ].join('-');
+function formatDisplayDate(date, language = window.calendarI18n.language) {
+  return calendarDateOrder(language).map(part => String(date[part]).padStart(part === 'year' ? 4 : 2, '0')).join('/');
 }
 
 function formatCalendarDateInput(event) {
   const digits = event.target.value.replace(/\D/g, '').slice(0, 8);
-  const parts = [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4, 8)].filter(Boolean);
-  event.target.value = parts.join('-');
+  let offset = 0;
+  const parts = calendarDateOrder().map(part => {
+    const length = part === 'year' ? 4 : 2;
+    const value = digits.slice(offset, offset + length);
+    offset += length;
+    return value;
+  }).filter(Boolean);
+  event.target.value = parts.join('/');
 }
 
 function updateLunarBirthdayFromGregorian(event) {
@@ -1168,7 +1175,7 @@ generateBirthdayButton.addEventListener('click', () => {
   const enteredLunarBirthDate = parseCalendarDate(lunarBirthday.value);
 
   if (!eventTitle || !enteredLunarBirthDate) {
-    lunarStatus.textContent = t('Enter an event title and lunar date as DD-MM-YYYY.');
+    lunarStatus.textContent = t('Enter an event title and lunar date as {format}.', { format: t('MM/DD/YYYY') });
     return;
   }
 
@@ -1185,7 +1192,7 @@ generateBirthdayButton.addEventListener('click', () => {
       enteredLunarBirthDate.day
     );
   } catch {
-    lunarStatus.textContent = t('Enter a valid lunar event date as DD-MM-YYYY.');
+    lunarStatus.textContent = t('Enter a valid lunar event date as {format}.', { format: t('MM/DD/YYYY') });
     return;
   }
 
@@ -1331,7 +1338,13 @@ pasteZone.addEventListener('click', () => {
   pasteZone.focus();
 });
 
+let dateInputLanguage = window.calendarI18n.language;
 document.addEventListener('languagechange', () => {
+  for (const field of [birthDate, lunarBirthday]) {
+    const date = parseCalendarDate(field.value, dateInputLanguage);
+    if (date) field.value = formatDisplayDate(date);
+  }
+  dateInputLanguage = window.calendarI18n.language;
   applyTheme(activeTheme.color.id, activeTheme.shade);
   renderEvents();
 });

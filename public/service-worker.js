@@ -1,4 +1,4 @@
-const CACHE_NAME = 'calendar-ics-tool-v36';
+const CACHE_NAME = 'calendar-ics-tool-v40';
 const LOCAL_ASSETS = [
   './',
   './index.html',
