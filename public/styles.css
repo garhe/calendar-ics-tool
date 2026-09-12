@@ -165,6 +165,14 @@ header {
   position: static;
 }
 
+.header-actions > details:not([open]) > div {
+  display: none;
+}
+
+.header-actions > details::details-content {
+  position: static;
+}
+
 .language-code {
   font-size: 0.75rem;
   font-weight: 600;
@@ -717,7 +725,31 @@ input[type="radio"] {
 
   .header-actions {
     width: 100%;
-    justify-content: flex-end;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    min-width: 0;
+  }
+
+  .header-actions > details {
+    min-width: 0;
+  }
+
+  .header-actions > details > summary {
+    width: 100%;
+    min-height: 48px;
+    height: auto;
+    padding: 0.6rem 0.35rem;
+    touch-action: manipulation;
+    overflow-wrap: anywhere;
+  }
+
+  .header-actions > details > :is(.theme-options, .language-options) {
+    left: auto;
+    right: 0;
+    max-width: 100%;
+    max-height: calc(100dvh - 180px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
 }
 
