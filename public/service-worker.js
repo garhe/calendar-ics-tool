@@ -1,4 +1,4 @@
-const CACHE_NAME = 'calendar-ics-tool-v40';
+const CACHE_NAME = 'calendar-ics-tool-v41';
 const LOCAL_ASSETS = [
   './',
   './index.html',
@@ -12,9 +12,10 @@ const LOCAL_ASSETS = [
   './manifest.webmanifest',
   './icons/app-icon.svg',
   './icons/app-icon.svg?v=2',
-  './icons/app-icon-180.png',
-  './icons/app-icon-192.png',
-  './icons/app-icon-512.png',
+  './icons/app-icon-180.png?v=3',
+  './icons/app-icon-192.png?v=3',
+  './icons/app-icon-512.png?v=3',
+  './icons/app-icon-maskable-512.png?v=3',
   './vendor/tesseract.min.js',
   './vendor/lunar.js',
   './vendor/rrule.min.js'
