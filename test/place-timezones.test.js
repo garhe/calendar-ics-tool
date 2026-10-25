@@ -19,7 +19,10 @@ test('detects individual cities, addresses, aliases and country hints', () => {
     ['Sydney', 'Australia/Sydney'],
     ['France', 'Europe/Paris'],
     ['Europe/Paris', 'Europe/Paris'],
-    ['New York', 'America/New_York']
+    ['New York', 'America/New_York'],
+    ['Bilbao', 'Europe/Madrid'],
+    ['Bilbo', 'Europe/Madrid'],
+    ['Bilbao BIO airport', 'Europe/Madrid']
   ]) assert.equal(detect(location), canonical(zone), location);
 });
 
@@ -124,6 +127,14 @@ test('keeps independent endpoint overrides when a route changes', () => {
   update(event);
   assert.equal(event.timezone, 'UTC+01:00');
   assert.equal(event.endTimezone, canonical('Asia/Tokyo'));
+});
+
+test('detects Bilbao flight endpoints and airport terminal suffixes', () => {
+  for (const location of ['Bilbao to Naples', 'BIO to NAP', 'BIO1 to NAP']) {
+    assert.deepEqual(endpoints({ location }), {
+      start: canonical('Europe/Madrid'), end: canonical('Europe/Rome')
+    }, location);
+  }
 });
 
 test('legacy manual single-zone events keep the same zone at both endpoints', () => {

@@ -16,6 +16,7 @@ const calendarPlaceTimezones = (() => {
     { label: 'Boston', timezone: 'America/New_York', terms: 'massachusetts' },
     { label: 'Montreal', timezone: 'America/Toronto', terms: 'quebec' },
     { label: 'Hamburg', timezone: 'Europe/Berlin', terms: 'germany' },
+    { label: 'Bilbao', timezone: 'Europe/Madrid', terms: 'bilbo spain bio', places: ['Bilbo'] },
     ...['Naples', 'Palermo', 'Catania', 'Amalfi', 'Positano'].map((label) => ({
       label, timezone: 'Europe/Rome', terms: 'italy'
     }))
@@ -32,6 +33,7 @@ const calendarPlaceTimezones = (() => {
     ['YYZ', 'America/Toronto', 'Toronto'], ['YUL', 'America/Toronto', 'Montreal'], ['YVR', 'America/Vancouver', 'Vancouver'],
     ['LHR', 'Europe/London', 'London'], ['LGW', 'Europe/London', 'London'], ['EDI', 'Europe/London', 'Edinburgh'],
     ['BER', 'Europe/Berlin', 'Berlin'], ['HAM', 'Europe/Berlin', 'Hamburg'],
+    ['BIO', 'Europe/Madrid', 'Bilbao'],
     ['FCO', 'Europe/Rome', 'Rome'], ['NAP', 'Europe/Rome', 'Naples'], ['CTA', 'Europe/Rome', 'Catania'], ['PMO', 'Europe/Rome', 'Palermo'],
     ['JFK', 'America/New_York', 'New York'], ['EWR', 'America/New_York', 'Newark'], ['BOS', 'America/New_York', 'Boston'],
     ['LAX', 'America/Los_Angeles', 'Los Angeles'], ['SFO', 'America/Los_Angeles', 'San Francisco'], ['SEA', 'America/Los_Angeles', 'Seattle'],

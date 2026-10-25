@@ -1,4 +1,4 @@
-const CACHE_NAME = 'calendar-ics-tool-v45';
+const CACHE_NAME = 'calendar-ics-tool-v47';
 const LOCAL_ASSETS = [
   './',
   './index.html',
@@ -10,6 +10,9 @@ const LOCAL_ASSETS = [
   './place-timezones.js',
   './flight-titles.js',
   './event-times.js',
+  './anchored-popover.js',
+  './date-picker.js',
+  './input-pickers.js',
   './artwork.js',
   './recurrence.js',
   './manifest.webmanifest',

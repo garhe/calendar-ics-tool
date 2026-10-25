@@ -359,7 +359,7 @@ function timezoneSearchResults(value) {
 function hideTimezoneOptions() {
   if (activeTimezoneInput) {
     const list = document.getElementById(activeTimezoneInput.getAttribute('aria-controls'));
-    if (list) list.hidden = true;
+    if (list) calendarPopover.hide(list);
     activeTimezoneInput.setAttribute('aria-expanded', 'false');
     activeTimezoneInput.removeAttribute('aria-activedescendant');
   }
@@ -384,7 +384,8 @@ function showTimezoneOptions(input) {
     option.textContent = `${label} (${timezone})`;
     return option;
   }));
-  list.hidden = results.length === 0;
+  if (results.length) calendarPopover.show(input, list);
+  else calendarPopover.hide(list);
   input.setAttribute('aria-expanded', String(results.length > 0));
 }
 
