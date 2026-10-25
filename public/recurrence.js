@@ -3,15 +3,21 @@ const recurrenceFields = recurrenceForm.elements;
 const recurrenceSummary = document.getElementById('recurrenceSummary');
 const recurrencePreview = document.getElementById('recurrencePreview');
 const recurrenceStatus = document.getElementById('recurrenceStatus');
+recurrenceForm.noValidate = true;
+let recurrenceValidationRequested = false;
 let recurrenceEditingEvent = null;
 let recurrenceExcludedDates = [];
 const recurrenceWeekdayCodes = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
 
-function recurrenceDate(value) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error('Choose a valid first date.');
+function recurrenceFieldError(field, message) {
+  return Object.assign(new Error(message), { field });
+}
+
+function recurrenceDate(value, field = 'date') {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw recurrenceFieldError(field, 'Choose a valid first date.');
   const date = new Date(`${value}T00:00:00Z`);
   if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== value) {
-    throw new Error('Choose a valid date.');
+    throw recurrenceFieldError(field, 'Choose a valid date.');
   }
   return date;
 }
@@ -20,10 +26,10 @@ function recurrenceChoices(name) {
   return [...recurrenceForm.querySelectorAll(`input[name="${name}"]:checked`)].map((input) => input.value);
 }
 
-function recurrenceInteger(value, maximum, label) {
+function recurrenceInteger(value, maximum, label, field) {
   const number = Number(value);
   if (!Number.isInteger(number) || number < 1 || number > maximum) {
-    throw new Error(`${label} must be between 1 and ${maximum}.`);
+    throw recurrenceFieldError(field, `${label} must be between 1 and ${maximum}.`);
   }
   return number;
 }
@@ -45,7 +51,7 @@ function buildRecurringEvent(settings) {
   settings = calendarPlaceTimezones.cleanEventLocation({ ...settings });
   if (typeof rrule === 'undefined') throw new Error('The recurrence library is unavailable. Reload the page.');
   const firstDate = recurrenceDate(settings.date);
-  const interval = recurrenceInteger(settings.interval, 99, 'Repeat interval');
+  const interval = recurrenceInteger(settings.interval, 99, 'Repeat interval', 'interval');
   const quarterly = settings.frequency === 'QUARTERLY';
   const frequency = quarterly ? 'MONTHLY' : settings.frequency;
   const options = {
@@ -54,27 +60,27 @@ function buildRecurringEvent(settings) {
     dtstart: firstDate,
     wkst: rrule.RRule[settings.weekStart || 'MO']
   };
-  if (!['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'].includes(frequency)) throw new Error('Choose a repeat frequency.');
+  if (!['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'].includes(frequency)) throw recurrenceFieldError('frequency', 'Choose a repeat frequency.');
   if (frequency === 'WEEKLY') {
-    if (!settings.weekdays.length) throw new Error('Select at least one weekday.');
+    if (!settings.weekdays.length) throw recurrenceFieldError('weekday', 'Select at least one weekday.');
     options.byweekday = settings.weekdays.map((day) => rrule.RRule[day]);
   }
   if (frequency === 'YEARLY') {
-    if (!settings.months.length) throw new Error('Select at least one month.');
+    if (!settings.months.length) throw recurrenceFieldError('month', 'Select at least one month.');
     options.bymonth = settings.months.map(Number);
   }
   if (frequency === 'MONTHLY' || frequency === 'YEARLY') {
     if (settings.pattern === 'weekday') {
       options.byweekday = [rrule.RRule[settings.positionDay].nth(Number(settings.position))];
     } else {
-      if (!settings.monthDays.length) throw new Error('Select at least one date of the month.');
+      if (!settings.monthDays.length) throw recurrenceFieldError('monthDay', 'Select at least one date of the month.');
       options.bymonthday = settings.monthDays.map(Number);
     }
   }
-  if (settings.ending === 'count') options.count = recurrenceInteger(settings.count, 9999, 'Occurrence count');
+  if (settings.ending === 'count') options.count = recurrenceInteger(settings.count, 9999, 'Occurrence count', 'count');
   if (settings.ending === 'until') {
-    const lastDate = recurrenceDate(settings.until);
-    if (lastDate < firstDate) throw new Error('The last date must not be before the first date.');
+    const lastDate = recurrenceDate(settings.until, 'until');
+    if (lastDate < firstDate) throw recurrenceFieldError('until', 'The last date must not be before the first date.');
     lastDate.setUTCHours(23, 59, 59);
     options.until = lastDate;
   }
@@ -93,7 +99,7 @@ function buildRecurringEvent(settings) {
   }
   let rule = new rrule.RRule(options);
   const first = rule.after(new Date(firstDate.getTime() - 1));
-  if (!first) throw new Error('No matching dates in this schedule.');
+  if (!first) throw recurrenceFieldError(settings.ending === 'until' ? 'until' : 'date', 'No matching dates in this schedule.');
   rule = new rrule.RRule({ ...options, dtstart: first });
   const preview = [];
   rule.all((date) => {
@@ -101,12 +107,15 @@ function buildRecurringEvent(settings) {
     if (!settings.excludedDates.includes(dateString)) preview.push(dateString);
     return preview.length < 5;
   });
-  if (!preview.length) throw new Error('No occurrences remain after skipped dates.');
+  if (!preview.length) throw recurrenceFieldError('recurrenceSkipDate', 'No occurrences remain after skipped dates.');
   const date = first.toISOString().slice(0, 10);
   const endDate = settings.allDay || settings.nextDay ? nextDate(date) : date;
-  if (!settings.allDay) calendarEventTimes.range({
-    date, endDate, startTime: settings.startTime, endTime: settings.endTime, timezone, endTimezone
-  });
+  if (!settings.allDay) {
+    const issues = calendarEventValidation.validate({
+      date, endDate, startTime: settings.startTime, endTime: settings.endTime, timezone, endTimezone
+    }, { requireTitle: false, requireIana: true });
+    if (issues.length) throw recurrenceFieldError(issues[0].field === 'endDate' ? 'nextDay' : issues[0].field, issues[0].message);
+  }
   return {
     title: settings.title.trim(), location: settings.location, description: settings.description,
     date, allDay: settings.allDay, startTime: settings.startTime, endTime: settings.endTime,
@@ -197,6 +206,42 @@ function refreshRecurrencePreview() {
   } catch (error) {
     recurrenceSummary.textContent = t(error.message);
   }
+  if (recurrenceValidationRequested) showRecurrenceValidation();
+}
+
+function recurrenceControl(field) {
+  const groups = { weekday: 'recurrenceWeekdays', month: 'recurrenceMonths', monthDay: 'recurrenceMonthDays', recurrenceSkipDate: 'recurrenceSkipDate' };
+  return groups[field] ? document.getElementById(groups[field]) : recurrenceFields[field];
+}
+
+function showRecurrenceValidation(locate = false) {
+  if (locate) recurrenceValidationRequested = true;
+  const settings = recurrenceSettings();
+  const issues = calendarValidation.nativeIssues(recurrenceForm);
+  const date = calendarEventValidation.validDate(settings.date) ? settings.date : '';
+  const endDate = date && (settings.allDay || settings.nextDay) ? nextDate(date) : date;
+  for (const issue of eventIssues({ ...settings, endDate, recurrence: {} }, { checkTiming: false })) {
+    issues.push({ ...issue, control: recurrenceControl(issue.field === 'endDate' ? 'nextDay' : issue.field) });
+  }
+  const frequency = settings.frequency;
+  for (const [needed, field, message] of [
+    [frequency === 'WEEKLY' && !settings.weekdays.length, 'weekday', 'Select at least one weekday.'],
+    [frequency === 'YEARLY' && !settings.months.length, 'month', 'Select at least one month.'],
+    [['MONTHLY', 'QUARTERLY', 'YEARLY'].includes(frequency) && settings.pattern === 'dates' && !settings.monthDays.length, 'monthDay', 'Select at least one date of the month.']
+  ]) {
+    if (needed) issues.push({ control: recurrenceControl(field), message });
+  }
+  if (!issues.length) {
+    try {
+      buildRecurringEvent(settings);
+    } catch (error) {
+      issues.push({ control: recurrenceControl(error.field) || recurrenceStatus, message: error.message });
+    }
+  }
+  const shown = calendarValidation.show(recurrenceForm, issues);
+  recurrenceStatus.textContent = shown.length ? t('Correct the highlighted fields before continuing.') : '';
+  if (locate) calendarValidation.focus(shown[0]?.control || recurrenceFields.title);
+  return shown;
 }
 
 function renderRecurrenceExclusions() {
@@ -378,8 +423,11 @@ function parseRecurrenceText(text, today) {
   return settings;
 }
 
-document.getElementById('recurrenceTextForm').addEventListener('submit', (event) => {
+const recurrenceTextForm = document.getElementById('recurrenceTextForm');
+recurrenceTextForm.noValidate = true;
+recurrenceTextForm.addEventListener('submit', (event) => {
   event.preventDefault();
+  calendarValidation.clear(recurrenceTextForm);
   const status = document.getElementById('recurrenceTextStatus');
   try {
     const now = new Date();
@@ -389,7 +437,10 @@ document.getElementById('recurrenceTextForm').addEventListener('submit', (event)
     status.textContent = `Schedule ready: ${recurrenceSummary.textContent}.`;
     recurrenceStatus.textContent = '';
   } catch (error) {
-    status.textContent = error.message;
+    status.textContent = t(error.message);
+    const input = document.getElementById('recurrenceText');
+    calendarValidation.show(recurrenceTextForm, [{ control: input, message: error.message }]);
+    calendarValidation.focus(input);
   }
 });
 
@@ -422,7 +473,12 @@ document.getElementById('recurrenceCancel').addEventListener('click', () => {
 });
 document.getElementById('recurrenceAddSkip').addEventListener('click', () => {
   const input = document.getElementById('recurrenceSkipDate');
-  if (!input.value || !input.reportValidity()) return;
+  if (!calendarEventValidation.validDate(input.value)) {
+    calendarValidation.show(input.parentElement, [{ control: input, message: 'Choose a valid date.' }]);
+    calendarValidation.focus(input);
+    return;
+  }
+  calendarValidation.clear(input.parentElement);
   recurrenceExcludedDates = [...new Set([...recurrenceExcludedDates, input.value])].sort();
   input.value = '';
   renderRecurrenceExclusions();
@@ -430,6 +486,8 @@ document.getElementById('recurrenceAddSkip').addEventListener('click', () => {
 });
 recurrenceForm.addEventListener('submit', (submitEvent) => {
   submitEvent.preventDefault();
+  recurrenceValidationRequested = true;
+  if (showRecurrenceValidation(true).length) return;
   try {
     const event = buildRecurringEvent(recurrenceSettings());
     if (!event.title) throw new Error('Enter an event title.');
@@ -450,6 +508,9 @@ recurrenceForm.addEventListener('submit', (submitEvent) => {
     setStatus(recurrenceStatus.textContent);
   } catch (error) {
     recurrenceStatus.textContent = t(error.message);
+    const control = recurrenceControl(error.field) || recurrenceStatus;
+    calendarValidation.show(recurrenceForm, [{ control, message: error.message }]);
+    calendarValidation.focus(control);
   }
 });
 eventsContainer.addEventListener('click', (clickEvent) => {

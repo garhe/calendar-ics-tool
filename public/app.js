@@ -266,6 +266,7 @@ const state = {
 };
 
 const creationEvents = { source: [], lunar: [], recurring: [] };
+const reviewValidationRequested = new Set();
 let activeCreation = '';
 
 function showCreationStep(review) {
@@ -487,7 +488,7 @@ function resolveTimezone(value) {
 }
 
 function setStatus(message) {
-  statusEl.textContent = message;
+  if (statusEl.textContent !== message) statusEl.textContent = message;
 }
 
 function sanitizeFilename(name, fallback = 'event') {
@@ -568,8 +569,15 @@ function timedEventRange(event) {
 }
 
 function isValidTimezoneValue(value) {
-  const timezone = resolveTimezone(value);
-  return Boolean(value) && (isIanaTimezone(timezone) || fixedTimezoneOffsetMinutes(timezone) !== null);
+  return Boolean(value) && calendarEventValidation.validTimezone(resolveTimezone(value));
+}
+
+function eventIssues(event, options) {
+  return calendarEventValidation.validate({
+    ...event,
+    timezone: event.timezone ? resolveTimezone(event.timezone) : '',
+    endTimezone: event.endTimezone ? resolveTimezone(event.endTimezone) : ''
+  }, { requireIana: Boolean(event.recurrence), ...options });
 }
 
 function refreshEventTiming(card, event) {
@@ -710,7 +718,7 @@ function updateLunarBirthdayFromGregorian(event) {
   formatCalendarDateInput(event);
   const gregorianDate = parseCalendarDate(birthDate.value);
 
-  if (!isValidGregorianDate(gregorianDate) || typeof Solar === 'undefined') {
+  if (!isValidGregorianDate(gregorianDate) || gregorianDate.year < 1901 || gregorianDate.year > 2099 || typeof Solar === 'undefined') {
     lunarBirthday.value = '';
     return;
   }
@@ -1002,6 +1010,7 @@ function renderEvents() {
     emptyMessage.className = 'hint';
     emptyMessage.textContent = t('No events yet. Extract from text or add one manually.');
     eventsContainer.append(emptyMessage);
+    refreshReviewValidation();
     return;
   }
 
@@ -1033,7 +1042,8 @@ function renderEvents() {
                     <label class="recurrence-toggle"><input type="checkbox" data-key="${automaticKey}" data-index="${index}" ${event[automaticKey] ? 'checked' : ''}>${t(automaticLabel)}</label>
                   </div>`).join('')}
              ${event.allDay
-               ? `<span class="hint">${t('All-day dates stay fixed; timezones are saved as additional information.')}</span>`
+               ? `<label>${t('End date')}<input data-key="endDate" data-index="${index}" type="date" value="${escapeHtml(event.endDate || '')}"><span class="hint">${t('All-day end date is exclusive; leave blank for the following day.')}</span></label>
+                  <span class="hint">${t('All-day dates stay fixed; timezones are saved as additional information.')}</span>`
                : `<label>${t('End date')}<input data-key="endDate" data-index="${index}" type="date" value="${escapeHtml(event.endDate || event.date)}"><span class="hint">${t('Inferred from timezones unless edited; clear to infer again.')}</span></label>`}
              <span class="hint" data-timing-status role="status"></span>
       </div>
@@ -1044,6 +1054,71 @@ function renderEvents() {
     eventsContainer.appendChild(card);
     refreshEventTiming(card, event);
   });
+  refreshReviewValidation();
+}
+
+function focusReviewIssue(index, field) {
+  toggleEventsButton.setAttribute('aria-expanded', 'true');
+  toggleEventsButton.textContent = t('Hide events ({count})', { count: state.events.length });
+  eventsRegion.hidden = false;
+  const card = eventsContainer.children[index];
+  const control = card?.querySelector(`[data-key="${field}"]`);
+  if (control?.matches(':disabled')) {
+    card.querySelector('[data-edit-recurrence]').click();
+    showRecurrenceValidation(true);
+  } else {
+    calendarValidation.focus(control);
+  }
+}
+
+function refreshReviewValidation() {
+  const summary = document.getElementById('reviewValidationSummary');
+  const wasInvalid = !summary.hidden;
+  summary.replaceChildren();
+  summary.hidden = true;
+  if (!reviewValidationRequested.has(activeCreation)) return [];
+  const allIssues = [];
+  state.events.forEach((event, index) => {
+    const card = eventsContainer.children[index];
+    const issues = eventIssues(event);
+    calendarValidation.show(card, issues.map((issue) => ({
+      ...issue, control: card.querySelector(`[data-key="${issue.field}"]`)
+    })));
+    card.classList.toggle('has-errors', issues.length > 0);
+    card.querySelector('.event-validation-status')?.remove();
+    if (issues.length) {
+      const badge = document.createElement('p');
+      badge.className = 'event-validation-status';
+      badge.textContent = t('Event {number}: {count} field(s) need attention.', { number: index + 1, count: issues.length });
+      card.querySelector('.event-head').after(badge);
+      allIssues.push(...issues.map((issue) => ({ ...issue, index })));
+    }
+  });
+  if (allIssues.length) {
+    const message = t('Fix {count} field(s) in {events} event(s) before exporting. No events have been exported.', {
+      count: allIssues.length, events: new Set(allIssues.map(({ index }) => index)).size
+    });
+    const heading = document.createElement('p');
+    heading.textContent = message;
+    const list = document.createElement('ul');
+    const labels = { title: 'Title', date: 'Date', startTime: 'Start', endTime: 'End', timezone: 'Start timezone', endTimezone: 'End timezone', endDate: 'End date' };
+    for (const { index, field, message: reason } of allIssues) {
+      const item = document.createElement('li');
+      const link = document.createElement('button');
+      link.type = 'button';
+      link.className = 'validation-link';
+      link.textContent = `${t('Event {number}', { number: index + 1 })} / ${t(labels[field])}: ${t(reason)}`;
+      link.addEventListener('click', () => focusReviewIssue(index, field));
+      item.append(link);
+      list.append(item);
+    }
+    summary.append(heading, list);
+    summary.hidden = false;
+    setStatus(message);
+  } else if (wasInvalid) {
+    setStatus(t(state.events.length ? 'All events are valid. You can export now.' : 'No events yet. Extract from text or add one manually.'));
+  }
+  return allIssues;
 }
 
 toggleEventsButton.addEventListener('click', () => {
@@ -1112,17 +1187,32 @@ removeScreenshotButton.addEventListener('click', () => {
 parseButton.addEventListener('click', () => {
   const text = rawText.value.trim();
   if (!text) {
+    calendarValidation.show(rawText.parentElement, [{ control: rawText, message: 'Paste or type event text first.' }]);
+    calendarValidation.focus(rawText);
     setStatus(t('Paste or type event text first.'));
     return;
   }
+  calendarValidation.clear(rawText.parentElement);
 
-  state.events = inferEventsFromText(text);
+  const parsedEvents = inferEventsFromText(text);
+  if (!parsedEvents.length) {
+    const message = 'No events could be extracted. Include a title and a valid date.';
+    renderEvents();
+    calendarValidation.show(rawText.parentElement, [{ control: rawText, message }]);
+    setStatus(t(message));
+    calendarValidation.focus(rawText);
+    return;
+  }
+  state.events = parsedEvents;
+  reviewValidationRequested.add(activeCreation);
   toggleEventsButton.setAttribute('aria-expanded', 'true');
   eventsRegion.hidden = false;
   renderEvents();
   showWorkspaceView('review');
 
   setStatus(t('Extracted {count} event(s). Review and edit before export.', { count: state.events.length }));
+  const issues = refreshReviewValidation();
+  if (issues.length) focusReviewIssue(issues[0].index, issues[0].field);
 });
 
 document.addEventListener('input', (event) => {
@@ -1150,6 +1240,7 @@ document.addEventListener('input', (event) => {
       target.closest('.event-card').querySelector('[data-key="title"]').value = entry.title;
     }
     refreshEventTiming(target.closest('.event-card'), entry);
+    refreshReviewValidation();
   }
 });
 
@@ -1171,6 +1262,13 @@ eventsContainer.addEventListener('change', (event) => {
     if (input) input.value = entry[key];
   }
   refreshEventTiming(card, entry);
+  refreshReviewValidation();
+});
+
+eventsContainer.addEventListener('change', (event) => {
+  if (!event.target.matches('[data-key]')) return;
+  reviewValidationRequested.add(activeCreation);
+  refreshReviewValidation();
 });
 
 eventsContainer.addEventListener('click', (event) => {
@@ -1200,17 +1298,52 @@ addEventButton.addEventListener('click', () => {
   renderEvents();
 });
 
+let lunarValidationRequested = false;
+const lunarEditor = birthdayName.closest('.creation-editor');
+
+function lunarFieldIssues() {
+  const issues = [];
+  if (!birthdayName.value.trim()) issues.push({ control: birthdayName, message: 'Enter an event title.' });
+  const gregorian = parseCalendarDate(birthDate.value);
+  if (birthDate.value && (!isValidGregorianDate(gregorian) || gregorian.year < 1901 || gregorian.year > 2099)) {
+    issues.push({ control: birthDate, message: 'Enter a valid date between 1901 and 2099 as {format}.', variables: { format: t('MM/DD/YYYY') } });
+  }
+  const lunar = parseCalendarDate(lunarBirthday.value);
+  let invalidLunar = !lunar || lunar.year < 1901 || lunar.year > 2099;
+  if (!invalidLunar && typeof Lunar !== 'undefined') {
+    try {
+      Lunar.fromYmd(lunar.year, lunar.month, lunar.day);
+    } catch (error) {
+      invalidLunar = true;
+    }
+  }
+  if (invalidLunar) issues.push({ control: lunarBirthday, message: 'Enter a valid lunar event date as {format}.', variables: { format: t('MM/DD/YYYY') } });
+  if (birthdayTimezone.value && !isValidTimezoneValue(birthdayTimezone.value)) {
+    issues.push({ control: birthdayTimezone, message: 'Choose a valid timezone, for example Europe/Paris or UTC+01:00.' });
+  }
+  return issues;
+}
+
+lunarEditor.addEventListener('input', () => {
+  if (!lunarValidationRequested) return;
+  const issues = calendarValidation.show(lunarEditor, lunarFieldIssues());
+  lunarStatus.textContent = issues.length ? t('Correct the highlighted fields before continuing.') : '';
+});
+
 generateBirthdayButton.addEventListener('click', () => {
+  lunarValidationRequested = true;
+  const issues = calendarValidation.show(lunarEditor, lunarFieldIssues());
+  if (issues.length) {
+    lunarStatus.textContent = t('Correct the highlighted fields before continuing.');
+    calendarValidation.focus(issues[0].control);
+    return;
+  }
   const eventTitle = birthdayName.value.trim();
   const enteredLunarBirthDate = parseCalendarDate(lunarBirthday.value);
 
-  if (!eventTitle || !enteredLunarBirthDate) {
-    lunarStatus.textContent = t('Enter an event title and lunar date as {format}.', { format: t('MM/DD/YYYY') });
-    return;
-  }
-
   if (typeof Solar === 'undefined' || typeof Lunar === 'undefined') {
     lunarStatus.textContent = t('The lunar calendar library did not load. Check your internet connection and reload.');
+    calendarValidation.focus(lunarStatus);
     return;
   }
 
@@ -1221,8 +1354,10 @@ generateBirthdayButton.addEventListener('click', () => {
       enteredLunarBirthDate.month,
       enteredLunarBirthDate.day
     );
-  } catch {
+  } catch (error) {
     lunarStatus.textContent = t('Enter a valid lunar event date as {format}.', { format: t('MM/DD/YYYY') });
+    calendarValidation.show(lunarEditor, [{ control: lunarBirthday, message: 'Enter a valid lunar event date as {format}.', variables: { format: t('MM/DD/YYYY') } }]);
+    calendarValidation.focus(lunarBirthday);
     return;
   }
 
@@ -1316,32 +1451,20 @@ pickFolderButton.addEventListener('click', async () => {
 
 exportButton.addEventListener('click', async () => {
   state.events.forEach((event) => calendarPlaceTimezones.update(calendarPlaceTimezones.cleanEventLocation(event)));
-  const invalidTimezoneEvent = state.events.find((event) => {
-    return [event.timezone, event.endTimezone].some((value) =>
-      event.allDay ? value && !isValidTimezoneValue(value) : !isValidTimezoneValue(value));
-  });
-  if (invalidTimezoneEvent) {
-    setStatus(t(invalidTimezoneEvent.allDay ? 'Choose a valid timezone.' : 'Every timed event requires valid start and end timezones.'));
-    return;
-  }
-
-  const validEvents = state.events.filter((event) => (
-    event.title && event.date && (event.allDay || (event.startTime && event.endTime && event.timezone && event.endTimezone))
-  ));
-  if (validEvents.length === 0) {
+  if (state.events.length === 0) {
     setStatus(t('Need at least one complete event with a title and date.'));
     return;
   }
-
-  const mode = document.querySelector('input[name="mode"]:checked').value;
-
-  try {
-    validEvents.filter((event) => !event.allDay).forEach((event) => timedEventRange(event));
-  } catch (error) {
-    console.error(error);
-    setStatus(t(error.message));
+  reviewValidationRequested.add(activeCreation);
+  renderEvents();
+  const issues = refreshReviewValidation();
+  if (issues.length) {
+    focusReviewIssue(issues[0].index, issues[0].field);
     return;
   }
+  const validEvents = structuredClone(state.events);
+
+  const mode = document.querySelector('input[name="mode"]:checked').value;
 
   try {
     if (mode === 'single') {
@@ -1383,6 +1506,7 @@ document.addEventListener('languagechange', () => {
     if (date) field.value = formatDisplayDate(date);
   }
   dateInputLanguage = window.calendarI18n.language;
+  if (lunarValidationRequested) calendarValidation.show(lunarEditor, lunarFieldIssues());
   applyTheme(activeTheme.color.id, activeTheme.shade);
   renderEvents();
 });

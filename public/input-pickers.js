@@ -137,18 +137,29 @@
     apply.textContent = t('Apply');
     footer.append(button('Cancel', () => close(true)), apply);
     form.append(error, footer);
-    form.addEventListener('submit', (event) => {
-      event.preventDefault();
+    function validatePicker(locate = false) {
       const controls = [...form.querySelectorAll('input')];
-      const invalid = controls.find((control) => !control.checkValidity());
       const candidate = input.cloneNode();
       candidate.value = value();
-      if (invalid || !candidate.value || !candidate.checkValidity()) {
-        error.textContent = t(color ? 'Enter a hex color as #RRGGBB.' : 'Choose a valid time within the allowed range and step.');
-        (invalid || controls[0]).focus();
-        return;
+      const message = color ? 'Enter a hex color as #RRGGBB.' : 'Choose a valid time within the allowed range and step.';
+      let issues = calendarValidation.nativeIssues(form);
+      if (color) issues = issues.map((issue) => ({ ...issue, message }));
+      if (!issues.length && (!candidate.value || !candidate.checkValidity())) {
+        issues = controls.map((control) => ({ control, message }));
       }
-      choose(candidate.value);
+      calendarValidation.show(form, issues);
+      error.textContent = issues.length ? t(message) : '';
+      calendarPopover.show(input, panel);
+      if (locate && issues.length) calendarValidation.focus(issues[0].control);
+      return issues.length ? null : candidate.value;
+    }
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const selected = validatePicker(true);
+      if (selected !== null) choose(selected);
+    });
+    form.addEventListener('input', () => {
+      if (form.classList.contains('validation-active')) validatePicker();
     });
     panel.replaceChildren(form);
     calendarPopover.show(input, panel);

@@ -79,7 +79,16 @@
     year.value = String(month.getFullYear());
     year.setAttribute('aria-label', t('Year'));
     year.addEventListener('change', () => {
-      if (!year.reportValidity() || !year.value) return;
+      if (!year.checkValidity()) {
+        calendarValidation.show(panel, [{
+          control: year, message: 'Enter a number from {min} to {max} in steps of {step}.',
+          variables: { min: year.min, max: year.max, step: '1' }
+        }]);
+        calendarPopover.show(input, panel);
+        calendarValidation.focus(year);
+        return;
+      }
+      calendarValidation.clear(panel);
       month.setFullYear(Number(year.value));
       focusedDate = dateValue(month);
       render();

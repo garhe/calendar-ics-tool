@@ -1,5 +1,8 @@
 :root {
   color-scheme: light;
+  --error: #a12622;
+  --error-soft: #fff1ef;
+  --error-ring: rgb(161 38 34 / 16%);
   --bg: #f6f8f8;
   --paper: #ffffff;
   --ink: #242c2c;
@@ -1664,6 +1667,75 @@ input[type="checkbox"] {
   margin: 0;
   color: var(--accent-2);
   font-size: 0.875rem;
+}
+
+:root[data-interface-style] .validation-active [aria-invalid="true"] {
+  border-color: var(--error);
+  outline: 2px solid var(--error);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 4px var(--error-ring);
+  scroll-margin-block: 6rem;
+}
+
+:root[data-interface-style] .event-card.has-errors {
+  border-color: var(--error);
+  border-inline-start: 4px solid var(--error);
+}
+
+.field-error,
+.event-validation-status {
+  display: block;
+  color: var(--error);
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.5;
+  margin-block: 0.25rem 0.6rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.validation-summary {
+  padding: 0.85rem 1rem;
+  margin-bottom: 1rem;
+  border: 1px solid var(--error);
+  border-inline-start-width: 4px;
+  border-radius: var(--flyout-radius);
+  color: var(--error);
+  background: var(--material-texture, none), var(--error-soft);
+}
+
+.date-picker-header > .field-error {
+  grid-column: 1 / -1;
+}
+
+.validation-summary p {
+  margin-top: 0;
+  font-weight: 600;
+}
+
+.validation-summary ul {
+  margin: 0;
+  padding-inline-start: 1.2rem;
+}
+
+:root[data-interface-style] .validation-summary button.validation-link {
+  display: inline-block;
+  min-height: 36px;
+  padding: 0.25rem;
+  color: var(--error);
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  box-shadow: none;
+  text-align: start;
+  text-decoration: underline;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.validation-link:focus-visible {
+  outline: 2px solid var(--error);
+  outline-offset: 2px;
 }
 
 .picker-error:empty {
