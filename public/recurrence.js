@@ -32,6 +32,8 @@ function recurrenceSettings() {
   const settings = Object.fromEntries(new FormData(recurrenceForm));
   settings.allDay = recurrenceFields.allDay.checked;
   settings.nextDay = recurrenceFields.nextDay.checked;
+  settings.timezoneAutomatic = recurrenceFields.timezoneAutomatic.checked;
+  settings.endTimezoneAutomatic = recurrenceFields.endTimezoneAutomatic.checked;
   settings.weekdays = recurrenceChoices('weekday');
   settings.months = recurrenceChoices('month');
   settings.monthDays = recurrenceChoices('monthDay');
@@ -40,6 +42,7 @@ function recurrenceSettings() {
 }
 
 function buildRecurringEvent(settings) {
+  settings = calendarPlaceTimezones.cleanEventLocation({ ...settings });
   if (typeof rrule === 'undefined') throw new Error('The recurrence library is unavailable. Reload the page.');
   const firstDate = recurrenceDate(settings.date);
   const interval = recurrenceInteger(settings.interval, 99, 'Repeat interval');
@@ -75,13 +78,18 @@ function buildRecurringEvent(settings) {
     lastDate.setUTCHours(23, 59, 59);
     options.until = lastDate;
   }
-  const timezone = resolveTimezone(settings.timezone);
+  const timezone = settings.timezone ? resolveTimezone(settings.timezone) : '';
+  const endTimezone = settings.endTimezone ? resolveTimezone(settings.endTimezone) : '';
+  if (settings.allDay && [settings.timezone, settings.endTimezone].some((value) => value && !isValidTimezoneValue(value))) {
+    throw new Error('Choose a valid timezone.');
+  }
   if (!settings.allDay) {
-    if (!settings.timezone || !isIanaTimezone(timezone)) throw new Error('Choose a city or IANA timezone, such as Europe/Paris.');
+    if (![settings.timezone, settings.endTimezone].every((value) => value && isIanaTimezone(resolveTimezone(value)))) {
+      throw new Error('Choose city/IANA timezones for both start and end.');
+    }
     if (![settings.startTime, settings.endTime].every((time) => /^([01]\d|2[0-3]):[0-5]\d$/.test(time))) {
       throw new Error('Choose valid start and end times.');
     }
-    if (!settings.nextDay && settings.endTime <= settings.startTime) throw new Error('End time must follow start time, or select next day.');
   }
   let rule = new rrule.RRule(options);
   const first = rule.after(new Date(firstDate.getTime() - 1));
@@ -95,11 +103,16 @@ function buildRecurringEvent(settings) {
   });
   if (!preview.length) throw new Error('No occurrences remain after skipped dates.');
   const date = first.toISOString().slice(0, 10);
+  const endDate = settings.allDay || settings.nextDay ? nextDate(date) : date;
+  if (!settings.allDay) calendarEventTimes.range({
+    date, endDate, startTime: settings.startTime, endTime: settings.endTime, timezone, endTimezone
+  });
   return {
     title: settings.title.trim(), location: settings.location, description: settings.description,
     date, allDay: settings.allDay, startTime: settings.startTime, endTime: settings.endTime,
-    endDate: settings.allDay || settings.nextDay ? nextDate(date) : date,
-    timezone,
+    endDate,
+    timezone, endTimezone,
+    timezoneAutomatic: settings.timezoneAutomatic, endTimezoneAutomatic: settings.endTimezoneAutomatic,
     alarmMinutes: settings.alarm === '' ? undefined : Number(settings.alarm),
     recurrence: {
       settings: structuredClone(settings),
@@ -134,12 +147,29 @@ function recurrenceIcsLines(event) {
 }
 
 function refreshRecurrencePreview() {
+  const detected = calendarPlaceTimezones.update({
+    title: recurrenceFields.title.value, location: recurrenceFields.location.value, description: recurrenceFields.description.value,
+    timezone: recurrenceFields.timezone.value, endTimezone: recurrenceFields.endTimezone.value,
+    timezoneAutomatic: recurrenceFields.timezoneAutomatic.checked,
+    endTimezoneAutomatic: recurrenceFields.endTimezoneAutomatic.checked
+  });
+  recurrenceFields.timezone.value = detected.timezone;
+  recurrenceFields.endTimezone.value = detected.endTimezone;
+  document.getElementById('recurrenceTimezoneStatus').textContent =
+    !detected.timezone || !detected.endTimezone
+      ? t(recurrenceFields.allDay.checked
+        ? 'Timezone not detected. Enter a city or choose a timezone manually.'
+        : 'Start and end timezones are required.') : '';
   const frequency = recurrenceFields.frequency.value;
   const monthPattern = ['MONTHLY', 'QUARTERLY', 'YEARLY'].includes(frequency);
   document.getElementById('recurrenceTimes').hidden = recurrenceFields.allDay.checked;
-  for (const name of ['startTime', 'endTime', 'timezone']) {
+  document.getElementById('recurrenceAllDayTimezoneHint').hidden = !recurrenceFields.allDay.checked;
+  for (const name of ['startTime', 'endTime']) {
     recurrenceFields[name].required = !recurrenceFields.allDay.checked;
     recurrenceFields[name].disabled = recurrenceFields.allDay.checked;
+  }
+  for (const name of ['timezone', 'endTimezone']) {
+    recurrenceFields[name].required = !recurrenceFields.allDay.checked;
   }
   document.getElementById('recurrenceWeekStart').hidden = frequency !== 'WEEKLY';
   document.getElementById('recurrenceWeekdays').hidden = frequency !== 'WEEKLY';
@@ -216,6 +246,9 @@ function cancelRecurrenceEdit() {
 }
 
 function fillRecurrenceSettings(settings) {
+  recurrenceFields.timezoneAutomatic.checked = Boolean(settings.timezoneAutomatic);
+  recurrenceFields.endTimezoneAutomatic.checked = Boolean(settings.endTimezoneAutomatic ?? settings.timezoneAutomatic);
+  recurrenceFields.endTimezone.value = settings.endTimezone ?? settings.timezone ?? '';
   for (const [name, value] of Object.entries(settings)) {
     const field = recurrenceFields.namedItem(name);
     if (!field || Array.isArray(value)) continue;
@@ -242,7 +275,8 @@ function parseRecurrenceText(text, today) {
   const settings = {
     title: parts[1].replace(/\bbrithday\b/gi, 'birthday'),
     date: today, location: '', description: '', allDay: true, nextDay: false,
-    startTime: '09:00', endTime: '10:00', timezone: recurrenceFields.timezone.value,
+    startTime: '09:00', endTime: '10:00', timezone: '', endTimezone: '',
+    timezoneAutomatic: true, endTimezoneAutomatic: true,
     frequency: 'DAILY', interval: '1', weekStart: 'MO', pattern: 'dates',
     weekdays: [recurrenceWeekdayCodes[firstDate.getUTCDay()]],
     months: [String(firstDate.getUTCMonth() + 1)], monthDays: [String(firstDate.getUTCDate())],
@@ -360,6 +394,19 @@ document.getElementById('recurrenceTextForm').addEventListener('submit', (event)
 });
 
 recurrenceFields.date.addEventListener('change', setRecurrenceDateDefaults);
+recurrenceFields.location.addEventListener('change', () => {
+  const event = calendarPlaceTimezones.cleanEventLocation({
+    location: recurrenceFields.location.value, description: recurrenceFields.description.value
+  });
+  recurrenceFields.location.value = event.location;
+  recurrenceFields.description.value = event.description || '';
+});
+recurrenceFields.timezone.addEventListener('input', () => {
+  recurrenceFields.timezoneAutomatic.checked = false;
+});
+recurrenceFields.endTimezone.addEventListener('input', () => {
+  recurrenceFields.endTimezoneAutomatic.checked = false;
+});
 recurrenceForm.addEventListener('input', refreshRecurrencePreview);
 recurrenceForm.addEventListener('change', refreshRecurrencePreview);
 document.getElementById('creationDetailsButton').addEventListener('click', () => {
@@ -420,7 +467,6 @@ eventsContainer.addEventListener('click', (clickEvent) => {
 
 const recurrenceToday = new Date();
 recurrenceFields.date.value = `${recurrenceToday.getFullYear()}-${String(recurrenceToday.getMonth() + 1).padStart(2, '0')}-${String(recurrenceToday.getDate()).padStart(2, '0')}`;
-recurrenceFields.timezone.value = Intl.DateTimeFormat().resolvedOptions().timeZone || defaultTimezone;
 setRecurrenceDateDefaults();
 refreshRecurrencePreview();
 document.addEventListener('languagechange', () => {

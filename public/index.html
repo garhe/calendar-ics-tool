@@ -157,11 +157,21 @@
         <div id="recurrenceTimes" class="event-grid" hidden>
           <label>Start time<input name="startTime" type="time" value="09:00" /></label>
           <label>End time<input name="endTime" type="time" value="10:00" /></label>
-          <label class="timezone-field">Timezone
+          <label class="recurrence-toggle"><input name="nextDay" type="checkbox" /> Ends the next day</label>
+        </div>
+        <div class="event-grid">
+          <label class="timezone-field">Start timezone
             <input id="recurrenceTimezone" name="timezone" data-timezone-input type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="recurrenceTimezoneOptions" autocomplete="off" placeholder="City or IANA timezone" />
             <div id="recurrenceTimezoneOptions" class="timezone-options" role="listbox" hidden></div>
           </label>
-          <label class="recurrence-toggle"><input name="nextDay" type="checkbox" /> Ends the next day</label>
+          <label class="timezone-field">End timezone
+            <input id="recurrenceEndTimezone" name="endTimezone" data-timezone-input type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="recurrenceEndTimezoneOptions" autocomplete="off" placeholder="City or IANA timezone" />
+            <div id="recurrenceEndTimezoneOptions" class="timezone-options" role="listbox" hidden></div>
+          </label>
+          <label class="recurrence-toggle"><input name="timezoneAutomatic" type="checkbox" checked /> Auto-detect departure timezone</label>
+          <label class="recurrence-toggle"><input name="endTimezoneAutomatic" type="checkbox" checked /> Auto-detect arrival timezone</label>
+          <span id="recurrenceAllDayTimezoneHint" class="hint">All-day dates stay fixed; timezones are saved as additional information.</span>
+          <span id="recurrenceTimezoneStatus" class="hint" role="status"></span>
         </div>
         <div class="event-grid">
           <label>Repeat<select name="frequency">
@@ -255,6 +265,9 @@
   <script src="vendor/tesseract.min.js"></script>
   <script src="vendor/lunar.js"></script>
   <script src="vendor/rrule.min.js"></script>
+  <script src="place-timezones.js"></script>
+  <script src="flight-titles.js"></script>
+  <script src="event-times.js"></script>
   <script src="app.js"></script>
   <script src="artwork.js"></script>
   <script src="recurrence.js"></script>

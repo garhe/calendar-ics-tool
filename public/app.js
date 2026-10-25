@@ -315,19 +315,7 @@ const defaultTimezoneLabel = 'UTC+7 Ho Chi Minh City';
 const supportedTimezones = typeof Intl.supportedValuesOf === 'function'
   ? Intl.supportedValuesOf('timeZone')
   : [defaultTimezone];
-const timezoneAliases = [
-  { label: 'HCMC / Ho Chi Minh City', timezone: defaultTimezone, terms: 'hcmc saigon vietnam' },
-  { label: 'Hanoi', timezone: defaultTimezone, terms: 'ha noi vietnam' },
-  { label: 'Edinburgh', timezone: 'Europe/London', terms: 'scotland' },
-  { label: 'Rennes', timezone: 'Europe/Paris', terms: 'france' },
-  { label: 'Lille', timezone: 'Europe/Paris', terms: 'france' },
-  { label: 'Kyoto', timezone: 'Asia/Tokyo', terms: 'japan' },
-  { label: 'Osaka', timezone: 'Asia/Tokyo', terms: 'japan' },
-  { label: 'Beijing', timezone: 'Asia/Shanghai', terms: 'china' },
-  { label: 'Seattle', timezone: 'America/Los_Angeles', terms: 'washington' },
-  { label: 'Boston', timezone: 'America/New_York', terms: 'massachusetts' },
-  { label: 'Montreal', timezone: 'America/Toronto', terms: 'quebec' }
-];
+const timezoneAliases = calendarPlaceTimezones.aliases;
 
 birthdayTimezone.value = defaultTimezoneLabel;
 let activeTimezoneInput = null;
@@ -529,19 +517,6 @@ function escapeIcsText(text) {
     .replace(/\n/g, '\\n');
 }
 
-function toIcsDateTime(date, time) {
-  if (!date || !time) {
-    return null;
-  }
-
-  const [year, month, day] = date.split('-').map(Number);
-  const [hours, minutes] = time.split(':').map(Number);
-  const dt = new Date(year, (month || 1) - 1, day || 1, hours || 0, minutes || 0, 0);
-
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${dt.getFullYear()}${pad(dt.getMonth() + 1)}${pad(dt.getDate())}T${pad(dt.getHours())}${pad(dt.getMinutes())}00`;
-}
-
 function formatNowUtcStamp() {
   const now = new Date();
   const pad = (n) => String(n).padStart(2, '0');
@@ -579,67 +554,54 @@ function fixedTimezoneOffsetMinutes(timezone) {
   return match[1] === '+' ? minutes : -minutes;
 }
 
-function toIcsUtcDateTime(date, time, offsetMinutes) {
-  const [year, month, day] = date.split('-').map(Number);
-  const [hours, minutes] = time.split(':').map(Number);
-  const utcDate = new Date(Date.UTC(year, month - 1, day, hours, minutes) - offsetMinutes * 60000);
-  return utcDate.toISOString().replace(/[-:]/g, '').replace(/\.000Z$/, 'Z');
+function toIcsIanaUtcDateTime(date, time, timezone) {
+  return calendarEventTimes.toUtc(date, time, timezone);
 }
 
-function toIcsIanaUtcDateTime(date, time, timezone) {
-  const [year, month, day] = date.split('-').map(Number);
-  const [hours, minutes] = time.split(':').map(Number);
-  const intendedWallTime = Date.UTC(year, month - 1, day, hours, minutes);
-  const formatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone: timezone,
-    hourCycle: 'h23',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
+function timedEventRange(event) {
+  return calendarEventTimes.range({
+    ...event,
+    timezone: event.timezone ? resolveTimezone(event.timezone) : '',
+    endTimezone: event.endTimezone ? resolveTimezone(event.endTimezone) : ''
   });
+}
 
-  let utcTime = intendedWallTime;
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    const parts = Object.fromEntries(
-      formatter.formatToParts(new Date(utcTime))
-        .filter(({ type }) => type !== 'literal')
-        .map(({ type, value }) => [type, Number(value)])
-    );
-    const representedWallTime = Date.UTC(
-      parts.year,
-      parts.month - 1,
-      parts.day,
-      parts.hour,
-      parts.minute,
-      parts.second
-    );
-    utcTime += intendedWallTime - representedWallTime;
+function isValidTimezoneValue(value) {
+  const timezone = resolveTimezone(value);
+  return Boolean(value) && (isIanaTimezone(timezone) || fixedTimezoneOffsetMinutes(timezone) !== null);
+}
+
+function refreshEventTiming(card, event) {
+  const status = card.querySelector('[data-timing-status]');
+  if (event.allDay) {
+    status.textContent = [event.timezone, event.endTimezone].some((value) => value && !isValidTimezoneValue(value))
+      ? t('Choose a valid timezone.')
+      : (!event.timezone || !event.endTimezone) && (event.timezoneAutomatic || event.endTimezoneAutomatic)
+        ? t('Timezone not detected. Enter a city or choose a timezone manually.') : '';
+    return;
   }
-
-  return new Date(utcTime).toISOString().replace(/[-:]/g, '').replace(/\.000Z$/, 'Z');
+  try {
+    const times = timedEventRange(event);
+    card.querySelector('[data-key="endDate"]').value = times.endDate;
+    status.textContent = '';
+  } catch (error) {
+    status.textContent = t(error.message);
+  }
 }
 
 function eventToIcsBlock(event, timezone = resolveTimezone(birthdayTimezone.value)) {
+  calendarPlaceTimezones.cleanEventLocation(event);
+  calendarFlightTitles.update(event);
+  calendarPlaceTimezones.update(event);
   const eventTimezone = resolveTimezone(event.timezone || timezone);
-  const fixedOffsetMinutes = fixedTimezoneOffsetMinutes(eventTimezone);
-  const ianaTimezone = isIanaTimezone(eventTimezone);
+  const endTimezone = resolveTimezone(event.endTimezone || eventTimezone);
+  const times = event.allDay ? null : timedEventRange(event);
   const dtStart = event.allDay
     ? toIcsDate(event.date)
-    : fixedOffsetMinutes !== null
-      ? toIcsUtcDateTime(event.date, event.startTime, fixedOffsetMinutes)
-      : ianaTimezone
-        ? toIcsIanaUtcDateTime(event.date, event.startTime, eventTimezone)
-        : toIcsDateTime(event.date, event.startTime);
+    : times.start;
   const dtEnd = event.allDay
     ? toIcsDate(event.endDate || nextDate(event.date))
-    : fixedOffsetMinutes !== null
-      ? toIcsUtcDateTime(event.date, event.endTime, fixedOffsetMinutes)
-      : ianaTimezone
-        ? toIcsIanaUtcDateTime(event.date, event.endTime, eventTimezone)
-        : toIcsDateTime(event.date, event.endTime);
+    : times.end;
 
   if (!dtStart || !dtEnd) {
     return null;
@@ -658,10 +620,18 @@ function eventToIcsBlock(event, timezone = resolveTimezone(birthdayTimezone.valu
     `DESCRIPTION:${escapeIcsText(event.description || '')}`
   ];
 
+  if (event.allDay) {
+    for (const [key, property] of [['timezone', 'X-START-TIMEZONE'], ['endTimezone', 'X-END-TIMEZONE']]) {
+      if (!event[key]) continue;
+      if (!isValidTimezoneValue(event[key])) throw new Error('Choose a valid timezone.');
+      lines.push(`${property}:${escapeIcsText(resolveTimezone(event[key]))}`);
+    }
+  }
+
   if (event.recurrence) {
     if (!event.allDay) {
       lines[3] = `DTSTART;TZID=${eventTimezone}:${toIcsDate(event.date)}T${event.startTime.replace(':', '')}00`;
-      lines[4] = `DTEND;TZID=${eventTimezone}:${toIcsDate(event.endDate || event.date)}T${event.endTime.replace(':', '')}00`;
+      lines[4] = `DTEND;TZID=${endTimezone}:${toIcsDate(times.endDate)}T${event.endTime.replace(':', '')}00`;
     }
     lines.push(...recurrenceIcsLines(event));
   }
@@ -831,6 +801,7 @@ function inferEventsFromText(text) {
     const location = parts[2] || '';
     const description = parts[3] || '';
     const timezone = parts[4] || '';
+    const endTimezone = parts[5] || timezone;
 
     const dateResult = extractDate(dateTime);
     const timeResult = extractTimeRange(dateResult.remainingText);
@@ -841,14 +812,20 @@ function inferEventsFromText(text) {
       date: dateResult.date,
       startTime: timeResult.startTime,
       endTime: timeResult.endTime,
+      endDate: dateResult.date && timeResult.endDayOffset !== undefined ? addDays(dateResult.date, timeResult.endDayOffset) : '',
       allDay,
-      timezone: allDay ? timezone : (timezone || guessTimezone(`${location} ${description}`)),
+      timezone,
+      endTimezone,
+      timezoneAutomatic: !timezone,
+      endTimezoneAutomatic: !endTimezone,
       location,
       description
     });
   }
 
-  return events;
+  return events.map((event) => calendarFlightTitles.update(
+    calendarPlaceTimezones.update(calendarPlaceTimezones.cleanEventLocation(event))
+  ));
 }
 
 const monthNumbers = {
@@ -926,29 +903,23 @@ function parseFlexibleTime(hourValue, minuteValue = '0', meridiem = '') {
 function extractTimeRange(value) {
   const time = '(\\d{1,2})(?:[:h.]([0-5]\\d))?\\s*(am|pm)?';
   const range = new RegExp(`${time}\\s*(?:-|>|to|until|à|au|bis|hasta)\\s*${time}`, 'i');
-  const match = normalizeExtractedText(value).match(range);
+  const normalized = normalizeExtractedText(value);
+  const match = normalized.match(range);
   if (!match) return { startTime: '', endTime: '', remainingText: value };
+  const afterTime = normalized.slice(match.index + match[0].length);
+  const arrivalDay = afterTime.match(/^\s*(?:\(\s*\+(\d{1,2})\s*\)|\+(\d{1,2})(?:\s*days?)?)/i);
 
   return {
     startTime: parseFlexibleTime(match[1], match[2], match[3]),
     endTime: parseFlexibleTime(match[4], match[5], match[6] || match[3]),
-    remainingText: normalizeExtractedText(value).replace(match[0], ' ').replace(/\s+/g, ' ').trim()
+    endDayOffset: arrivalDay ? Number(arrivalDay[1] || arrivalDay[2]) : undefined,
+    remainingText: (normalized.slice(0, match.index) + ' ' + afterTime.slice(arrivalDay?.[0].length || 0))
+      .replace(/\s+/g, ' ').trim()
   };
 }
 
 function guessTimezone(value) {
-  const text = value.toLowerCase();
-  const timezoneHints = [
-    [/\b(paris|france|rennes|lille|metz|luxembourg|brussels|bruges)\b/, 'Europe/Paris'],
-    [/\b(london|edinburgh|uk|england|scotland)\b/, 'Europe/London'],
-    [/\b(tokyo|kyoto|osaka|japan)\b/, 'Asia/Tokyo'],
-    [/\b(berlin|hamburg|germany)\b/, 'Europe/Berlin'],
-    [/\b(rome|naples|palermo|catania|italy)\b/, 'Europe/Rome'],
-    [/\b(toronto|montreal)\b/, 'America/Toronto'],
-    [/\b(vancouver)\b/, 'America/Vancouver'],
-    [/\b(ho chi minh|hanoi|vietnam)\b/, 'Asia/Ho_Chi_Minh']
-  ];
-  return timezoneHints.find(([pattern]) => pattern.test(text))?.[1] || defaultTimezone;
+  return calendarPlaceTimezones.detect(value);
 }
 
 function inferFlexibleEvent(line) {
@@ -959,13 +930,14 @@ function inferFlexibleEvent(line) {
   const stayMatch = dateResult.remainingText.match(/(?:>|to)?\s*(?:\d{1,2}\s+[a-z]+(?:\s+20\d{2})?\s*:?)?\s*(\d+)\s+nights?\s+in\s+(.+)/i);
   if (stayMatch) {
     const nights = Number(stayMatch[1]);
-    const location = stayMatch[2].replace(/\s+\d+(?:[.,]\d+)?\s*(?:€|eur|usd|gbp).*$/i, '').trim();
+    const location = calendarPlaceTimezones.cleanLocation(stayMatch[2]);
     return {
       title: `${nights}-night stay in ${location}`,
       date: dateResult.date,
       endDate: addDays(dateResult.date, nights),
       allDay: true,
       timezone: guessTimezone(location),
+      timezoneAutomatic: true,
       location,
       description: normalizedLine
     };
@@ -980,27 +952,31 @@ function inferFlexibleEvent(line) {
   const serviceRoute = details.match(/\b(?:(train|bus|flight|ferry)\s+)?((?:[a-z]{2,}\s+)?[a-z]*\d[\w-]*)\s+(.+?)\s*>\s*(.+?)(?=\s+\d+(?:[.,]\d+)?\s*(?:€|eur|usd|gbp)|$)/i);
   const plainRoute = details.match(/^(.+?)\s*>\s*(.+)$/);
   const routeMatch = serviceRoute || plainRoute;
-  const mode = serviceRoute?.[1] || (serviceRoute ? 'Flight' : '');
+  const mode = serviceRoute?.[1] || (serviceRoute
+    ? /^(?:IC|ICE|TGV|TER|RE|RJ|EC|EN|NJ)\s*\d/i.test(serviceRoute[2]) ? 'Train' : 'Flight'
+    : '');
   const service = serviceRoute?.[2] || '';
   const origin = (serviceRoute?.[3] || plainRoute?.[1] || '').trim();
   const destination = (serviceRoute?.[4] || plainRoute?.[2] || '').trim();
-  const location = routeMatch ? `${origin} to ${destination}` : '';
+  const location = calendarPlaceTimezones.cleanLocation(routeMatch ? `${origin} to ${destination}` : details);
   const title = serviceRoute
     ? `${mode[0].toUpperCase()}${mode.slice(1).toLowerCase()} ${service}`.trim() + `: ${location}`
     : plainRoute
       ? location
     : (details.replace(/\s+\d+(?:[.,]\d+)?\s*(?:€|eur|usd|gbp).*$/i, '').trim() || 'Calendar event');
 
-  return {
+  return calendarFlightTitles.update(calendarPlaceTimezones.update({
     title,
     date: dateResult.date,
     startTime: timeResult.startTime,
     endTime: timeResult.endTime,
+    endDate: timeResult.endDayOffset === undefined ? '' : addDays(dateResult.date, timeResult.endDayOffset),
     allDay: !timeResult.startTime,
-    timezone: guessTimezone(`${location} ${details}`),
+    timezone: guessTimezone(location),
+    timezoneAutomatic: true,
     location,
     description: normalizedLine
-  };
+  }));
 }
 
 function normalizeTime(value) {
@@ -1029,6 +1005,9 @@ function renderEvents() {
   }
 
   state.events.forEach((event, index) => {
+    calendarPlaceTimezones.cleanEventLocation(event);
+    calendarFlightTitles.update(event);
+    calendarPlaceTimezones.update(event);
     const card = document.createElement('div');
     card.className = 'event-card';
     card.innerHTML = `
@@ -1044,14 +1023,25 @@ function renderEvents() {
         ${event.allDay
           ? `<div class="all-day-label">${t('All-day event')}</div>`
           : `<label>${t('Start')}<input data-key="startTime" data-index="${index}" type="time" value="${escapeHtml(event.startTime)}"></label>
-             <label>${t('End')}<input data-key="endTime" data-index="${index}" type="time" value="${escapeHtml(event.endTime)}"></label>
-             <label class="timezone-field">${t('Timezone (required)')}<input id="eventTimezone-${index}" data-timezone-input data-key="timezone" data-index="${index}" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="eventTimezoneOptions-${index}" autocomplete="off" required placeholder="${t('City or UTC offset')}" value="${escapeHtml(event.timezone)}"><div id="eventTimezoneOptions-${index}" class="timezone-options" role="listbox" hidden></div></label>`}
+             <label>${t('End')}<input data-key="endTime" data-index="${index}" type="time" value="${escapeHtml(event.endTime)}"></label>`}
+             ${[['timezone', 'timezoneAutomatic', 'Start timezone', 'Auto-detect departure timezone'],
+                ['endTimezone', 'endTimezoneAutomatic', 'End timezone', 'Auto-detect arrival timezone']]
+                .map(([key, automaticKey, label, automaticLabel]) => `
+                  <div>
+                    <label class="timezone-field">${t(label)}<input id="event-${key}-${index}" data-timezone-input data-key="${key}" data-index="${index}" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="event-${key}-options-${index}" autocomplete="off" ${event.allDay ? '' : 'required'} placeholder="${t('City or UTC offset')}" value="${escapeHtml(event[key])}"><div id="event-${key}-options-${index}" class="timezone-options" role="listbox" hidden></div></label>
+                    <label class="recurrence-toggle"><input type="checkbox" data-key="${automaticKey}" data-index="${index}" ${event[automaticKey] ? 'checked' : ''}>${t(automaticLabel)}</label>
+                  </div>`).join('')}
+             ${event.allDay
+               ? `<span class="hint">${t('All-day dates stay fixed; timezones are saved as additional information.')}</span>`
+               : `<label>${t('End date')}<input data-key="endDate" data-index="${index}" type="date" value="${escapeHtml(event.endDate || event.date)}"><span class="hint">${t('Inferred from timezones unless edited; clear to infer again.')}</span></label>`}
+             <span class="hint" data-timing-status role="status"></span>
       </div>
       ${event.recurrence ? '</fieldset>' : ''}
       <label>${t('Description')}<input data-key="description" data-index="${index}" type="text" value="${escapeHtml(event.description)}"></label>
     `;
 
     eventsContainer.appendChild(card);
+    refreshEventTiming(card, event);
   });
 }
 
@@ -1140,8 +1130,46 @@ document.addEventListener('input', (event) => {
   const key = target.dataset.key;
 
   if (Number.isInteger(index) && key && state.events[index]) {
-    state.events[index][key] = target.value;
+    const entry = state.events[index];
+    entry[key] = target.type === 'checkbox' ? target.checked : target.value;
+    if (key === 'timezone') entry.timezoneAutomatic = false;
+    if (key === 'endTimezone') entry.endTimezoneAutomatic = false;
+    if (['location', 'description', 'timezoneAutomatic', 'endTimezoneAutomatic'].includes(key)) calendarPlaceTimezones.update(entry);
+    if (['location', 'description', 'timezone', 'endTimezone', 'timezoneAutomatic', 'endTimezoneAutomatic'].includes(key)) {
+      const card = target.closest('.event-card');
+      for (const [timezoneKey, automaticKey] of [['timezone', 'timezoneAutomatic'], ['endTimezone', 'endTimezoneAutomatic']]) {
+        const input = card.querySelector(`[data-key="${timezoneKey}"]`);
+        if (input && key !== timezoneKey) input.value = entry[timezoneKey];
+        const automaticInput = card.querySelector(`[data-key="${automaticKey}"]`);
+        if (automaticInput) automaticInput.checked = Boolean(entry[automaticKey]);
+      }
+    }
+    if (['startTime', 'endTime', 'description', 'location'].includes(key)) {
+      calendarFlightTitles.update(entry);
+      target.closest('.event-card').querySelector('[data-key="title"]').value = entry.title;
+    }
+    refreshEventTiming(target.closest('.event-card'), entry);
   }
+});
+
+eventsContainer.addEventListener('change', (event) => {
+  if (!['title', 'location'].includes(event.target.dataset.key)) return;
+  const entry = state.events[Number(event.target.dataset.index)];
+  if (!entry) return;
+  const card = event.target.closest('.event-card');
+  if (event.target.dataset.key === 'location') {
+    calendarPlaceTimezones.cleanEventLocation(entry);
+    card.querySelector('[data-key="description"]').value = entry.description || '';
+  }
+  calendarFlightTitles.update(entry);
+  calendarPlaceTimezones.update(entry);
+  event.target.value = entry[event.target.dataset.key];
+  card.querySelector('[data-key="title"]').value = entry.title;
+  for (const key of ['timezone', 'endTimezone']) {
+    const input = card.querySelector(`[data-key="${key}"]`);
+    if (input) input.value = entry[key];
+  }
+  refreshEventTiming(card, entry);
 });
 
 eventsContainer.addEventListener('click', (event) => {
@@ -1164,6 +1192,7 @@ addEventButton.addEventListener('click', () => {
     startTime: '',
     endTime: '',
     timezone: '',
+    timezoneAutomatic: true,
     location: '',
     description: ''
   });
@@ -1285,18 +1314,18 @@ pickFolderButton.addEventListener('click', async () => {
 });
 
 exportButton.addEventListener('click', async () => {
+  state.events.forEach((event) => calendarPlaceTimezones.update(calendarPlaceTimezones.cleanEventLocation(event)));
   const invalidTimezoneEvent = state.events.find((event) => {
-    if (event.allDay) return false;
-    const timezone = resolveTimezone(event.timezone);
-    return !event.timezone || (!isIanaTimezone(timezone) && fixedTimezoneOffsetMinutes(timezone) === null);
+    return [event.timezone, event.endTimezone].some((value) =>
+      event.allDay ? value && !isValidTimezoneValue(value) : !isValidTimezoneValue(value));
   });
   if (invalidTimezoneEvent) {
-    setStatus(t('Every timed event requires a valid city/IANA timezone or UTC offset.'));
+    setStatus(t(invalidTimezoneEvent.allDay ? 'Choose a valid timezone.' : 'Every timed event requires valid start and end timezones.'));
     return;
   }
 
   const validEvents = state.events.filter((event) => (
-    event.title && event.date && (event.allDay || (event.startTime && event.endTime && event.timezone))
+    event.title && event.date && (event.allDay || (event.startTime && event.endTime && event.timezone && event.endTimezone))
   ));
   if (validEvents.length === 0) {
     setStatus(t('Need at least one complete event with a title and date.'));
@@ -1304,6 +1333,14 @@ exportButton.addEventListener('click', async () => {
   }
 
   const mode = document.querySelector('input[name="mode"]:checked').value;
+
+  try {
+    validEvents.filter((event) => !event.allDay).forEach((event) => timedEventRange(event));
+  } catch (error) {
+    console.error(error);
+    setStatus(t(error.message));
+    return;
+  }
 
   try {
     if (mode === 'single') {

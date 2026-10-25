@@ -4,7 +4,8 @@
   "private": true,
   "description": "Paste text or screenshot, extract events, and export ICS files",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test"
   },
   "dependencies": {
     "express": "^4.21.2"
